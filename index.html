@@ -1,0 +1,296 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Alienshooter with Enemy Patterns</title>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+        }
+        canvas {
+            background: black;
+            display: block;
+        }
+        #score {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            color: white;
+            font-size: 20px;
+        }
+        #gameOver, #clear {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            color: white;
+            font-size: 30px;
+            display: none;
+        }
+        #retryBtn, #level2Btn {
+            position: absolute;
+            top: 60%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            font-size: 20px;
+            padding: 10px 20px;
+            display: none;
+        }
+    </style>
+</head>
+<body>
+    <canvas id="gameCanvas"></canvas>
+    <div id="score">Score: 0</div>
+    <div id="gameOver">Game Over</div>
+    <div id="clear">Clear!</div>
+    <button id="retryBtn">Retry</button>
+    <button id="level2Btn">2 Level</button>
+
+    <script>
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        canvas.width = window.innerWidth;
+        canvas.height = window.innerHeight;
+
+        const ship = {
+            x: canvas.width / 2 - 20,
+            y: canvas.height - 60,
+            width: 40,
+            height: 60,
+            dx: 0,
+            dy: 0,
+            speed: 5
+        };
+
+        let bullets = [];
+        let enemyBullets = [];
+        let enemies = [];
+        let score = 0;
+        let gameOver = false;
+        let clearGame = false;
+        let enemySpeed = 0.5;
+        let speedIncreaseRate = 0.01;
+        let changePatternInterval = 3000;
+
+        function drawShip() {
+            ctx.fillStyle = 'blue';
+            ctx.fillRect(ship.x, ship.y, ship.width, ship.height);
+        }
+
+        function createBullet() {
+            bullets.push({ x: ship.x + ship.width / 2 - 2.5, y: ship.y, width: 5, height: 20 });
+        }
+
+        function drawBullets() {
+            ctx.fillStyle = 'red';
+            bullets.forEach((bullet, index) => {
+                bullet.y -= 12;
+                ctx.fillRect(bullet.x, bullet.y, bullet.width, bullet.height);
+                if (bullet.y < 0) bullets.splice(index, 1);
+            });
+        }
+
+        function createEnemy() {
+            const size = Math.random() * 30 + 20;
+            enemies.push({
+                x: Math.random() * (canvas.width - size),
+                y: -size,
+                width: size,
+                height: size,
+                speed: enemySpeed,
+                pattern: 'vertical',
+                zigzagDirection: Math.random() < 0.5 ? -1 : 1,
+                zigzagSpeed: 0.8
+            });
+        }
+
+        function drawEnemies() {
+            ctx.fillStyle = 'green';
+            enemies.forEach((enemy, index) => {
+                if (enemy.pattern === 'vertical') {
+                    enemy.y += enemy.speed;
+                } else if (enemy.pattern === 'zigzag') {
+                    enemy.y += enemy.speed;
+                    enemy.x += enemy.zigzagDirection * enemy.zigzagSpeed;
+                    if (enemy.x < 0 || enemy.x + enemy.width > canvas.width) {
+                        enemy.zigzagDirection *= -1;
+                    }
+                }
+                ctx.fillRect(enemy.x, enemy.y, enemy.width, enemy.height);
+
+                if (enemy.y > canvas.height) endGame();
+            });
+        }
+
+        function createEnemyBullet(enemy) {
+            if (Math.random() < 0.25) {
+                enemyBullets.push({ x: enemy.x + enemy.width / 2 - 2.5, y: enemy.y + enemy.height, width: 5, height: 20 });
+            }
+        }
+
+        function drawEnemyBullets() {
+            ctx.fillStyle = 'yellow';
+            enemyBullets.forEach((bullet, index) => {
+                bullet.y += 1.5;
+                ctx.fillRect(bullet.x, bullet.y, bullet.width, bullet.height);
+                if (bullet.y > canvas.height) enemyBullets.splice(index, 1);
+            });
+        }
+
+        function checkCollisions() {
+            enemies.forEach((enemy, eIndex) => {
+                bullets.forEach((bullet, bIndex) => {
+                    if (
+                        bullet.x < enemy.x + enemy.width &&
+                        bullet.x + bullet.width > enemy.x &&
+                        bullet.y < enemy.y + enemy.height &&
+                        bullet.y + bullet.height > enemy.y
+                    ) {
+                        bullets.splice(bIndex, 1);
+                        enemies.splice(eIndex, 1);
+                        score += 10;
+                        document.getElementById('score').textContent = `Score: ${score}`;
+                        if (score >= 100) {
+                            clearGame = true;
+                            clearGameState();
+                        }
+                    }
+                });
+
+                if (
+                    ship.x < enemy.x + enemy.width &&
+                    ship.x + ship.width > enemy.x &&
+                    ship.y < enemy.y + enemy.height &&
+                    ship.y + ship.height > enemy.y
+                ) {
+                    endGame();
+                }
+            });
+
+            enemyBullets.forEach((bullet, index) => {
+                if (
+                    bullet.x < ship.x + ship.width &&
+                    bullet.x + bullet.width > ship.x &&
+                    bullet.y < ship.y + ship.height &&
+                    bullet.y + bullet.height > ship.y
+                ) {
+                    endGame();
+                }
+            });
+        }
+
+        function endGame() {
+            gameOver = true;
+            document.getElementById('gameOver').style.display = 'block';
+            document.getElementById('retryBtn').style.display = 'block';
+            clearInterval(enemyInterval);
+            clearInterval(bulletInterval);
+            clearInterval(enemyBulletInterval);
+            clearInterval(speedInterval);
+            clearInterval(patternChangeInterval);
+        }
+
+        function clearGameState() {
+            document.getElementById('clear').style.display = 'block';
+            document.getElementById('retryBtn').style.display = 'block';
+            document.getElementById('level2Btn').style.display = 'block';
+            clearInterval(enemyInterval);
+            clearInterval(bulletInterval);
+            clearInterval(enemyBulletInterval);
+            clearInterval(speedInterval);
+            clearInterval(patternChangeInterval);
+        }
+
+        function resetGame() {
+            gameOver = false;
+            clearGame = false;
+            score = 0;
+            bullets = [];
+            enemyBullets = [];
+            enemies = [];
+            ship.x = canvas.width / 2 - 20;
+            ship.y = canvas.height - 60;
+            enemySpeed = 0.5;
+            document.getElementById('score').textContent = `Score: ${score}`;
+            document.getElementById('gameOver').style.display = 'none';
+            document.getElementById('clear').style.display = 'none';
+            document.getElementById('retryBtn').style.display = 'none';
+            document.getElementById('level2Btn').style.display = 'none';
+            enemyInterval = setInterval(createEnemy, 2000);  // 적 생성 속도 조금 증가
+            bulletInterval = setInterval(createBullet, 800);
+            enemyBulletInterval = setInterval(() => {
+                enemies.forEach(enemy => createEnemyBullet(enemy));
+            }, 1500);
+            speedInterval = setInterval(increaseEnemySpeed, 1000);
+            patternChangeInterval = setInterval(changeEnemyPattern, changePatternInterval);
+            gameLoop();
+        }
+
+        function increaseEnemySpeed() {
+            enemySpeed += speedIncreaseRate;
+        }
+
+        function changeEnemyPattern() {
+            enemies.forEach(enemy => {
+                enemy.pattern = Math.random() < 0.5 ? 'vertical' : 'zigzag';
+            });
+        }
+
+        function gameLoop() {
+            if (gameOver || clearGame) return;
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            drawShip();
+            drawBullets();
+            drawEnemies();
+            drawEnemyBullets();
+            checkCollisions();
+            requestAnimationFrame(gameLoop);
+        }
+
+        // 모바일 터치 입력 처리
+        let touchX, touchY;
+
+        canvas.addEventListener('touchstart', (e) => {
+            touchX = e.touches[0].clientX;
+            touchY = e.touches[0].clientY;
+        });
+
+        canvas.addEventListener('touchmove', (e) => {
+            const newX = e.touches[0].clientX;
+            const newY = e.touches[0].clientY;
+            
+            const diffX = newX - touchX;
+            const diffY = newY - touchY;
+
+            ship.x += diffX;
+            ship.y += diffY;
+
+            touchX = newX;
+            touchY = newY;
+
+            if (ship.x < 0) ship.x = 0;
+            if (ship.x + ship.width > canvas.width) ship.x = canvas.width - ship.width;
+            if (ship.y < 0) ship.y = 0;
+if (ship.y + ship.height > canvas.height) ship.y = canvas.height - ship.height;
+});
+
+document.getElementById('retryBtn').addEventListener('click', resetGame);
+
+document.getElementById('level2Btn').addEventListener('click', () => {
+    alert('앱을 다시시작하여 2렙을 시작!.');
+});
+
+let enemyInterval = setInterval(createEnemy, 2000);
+let bulletInterval = setInterval(createBullet, 800);
+let enemyBulletInterval = setInterval(() => {
+    enemies.forEach(enemy => createEnemyBullet(enemy));
+}, 1500);
+let speedInterval = setInterval(increaseEnemySpeed, 1000);
+let patternChangeInterval = setInterval(changeEnemyPattern, changePatternInterval);
+
+gameLoop();
+</script>
+</body>
+</html>
