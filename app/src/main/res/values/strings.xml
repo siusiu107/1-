@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Shizuku 설치기</string>
+    <string name="install_with_label">Shizuku로 설치</string>
+    <string name="tagline">Shizuku(adb/root)로 APK를 강제 설치합니다</string>
+
+    <string name="state_not_running">Shizuku가 실행되고 있지 않음</string>
+    <string name="state_too_old">Shizuku 버전이 너무 낮음</string>
+    <string name="state_no_perm">권한이 필요함</string>
+    <string name="state_ready">준비됨 (%1$s)</string>
+
+    <string name="hint_not_running">Shizuku 앱을 열어 서비스를 먼저 시작하세요. (adb 또는 무선 디버깅으로 활성화)</string>
+    <string name="hint_too_old">Shizuku를 최신 버전(v11 이상)으로 업데이트하세요.</string>
+    <string name="hint_no_perm">아래 버튼을 눌러 이 앱에 Shizuku 권한을 허용하세요.</string>
+    <string name="hint_ready">이제 APK를 공유하거나 파일에서 열면 \"Shizuku로 설치\"가 나타납니다.</string>
+
+    <string name="usage">사용법\n1. Shizuku를 설치하고 서비스를 시작합니다.\n2. 이 앱에 Shizuku 권한을 허용합니다.\n3. 파일 관리자나 브라우저에서 APK를 열 때 \"Shizuku로 설치\"를 선택합니다.\n\n단일 APK는 물론 .apks/.xapk/.apkm 분할 묶음도 설치할 수 있습니다.</string>
+
+    <string name="grant">권한 허용</string>
+    <string name="refresh">새로고침</string>
+    <string name="denied_before">이전에 거부했습니다. Shizuku 앱의 권한 관리에서 직접 허용하세요.</string>
+    <string name="already_ready">이미 준비되어 있습니다.</string>
+
+    <plurals name="ready_to_install">
+        <item quantity="other">APK %1$d개를 설치합니다</item>
+    </plurals>
+    <string name="installing">설치 중… (%1$s 권한)</string>
+    <string name="install_success">설치 완료</string>
+    <string name="install_failed">설치 실패</string>
+    <string name="cannot_install">설치할 수 없음</string>
+    <string name="no_file">설치할 파일이 없습니다</string>
+
+    <string name="install">설치</string>
+    <string name="cancel">취소</string>
+    <string name="retry">다시 시도</string>
+    <string name="close">닫기</string>
+    <string name="done">완료</string>
+    <string name="open_app">열기</string>
+</resources>
