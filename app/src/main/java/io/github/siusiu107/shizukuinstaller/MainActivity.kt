@@ -36,7 +36,10 @@ import androidx.compose.ui.unit.sp
 import androidx.core.net.toUri
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.lifecycleScope
 import io.github.siusiu107.shizukuinstaller.pkg.Prefs
+import io.github.siusiu107.shizukuinstaller.pkg.WirelessAdb
+import kotlinx.coroutines.launch
 import io.github.siusiu107.shizukuinstaller.ui.BrandLogo
 import io.github.siusiu107.shizukuinstaller.ui.theme.*
 import rikka.shizuku.Shizuku
@@ -64,6 +67,7 @@ class MainActivity : ComponentActivity() {
                 val state = remember { mutableStateOf(Shell.state()) }
                 stateHolder = state
                 val history = remember { mutableStateOf(prefs.history()) }
+                val adbConnected = remember { mutableStateOf(WirelessAdb.connected(this)) }
                 val owner = LocalLifecycleOwner.current
                 DisposableEffect(owner) {
                     val obs = LifecycleEventObserver { _, e ->
@@ -71,7 +75,14 @@ class MainActivity : ComponentActivity() {
                             state.value = Shell.state()
                             history.value = prefs.history()
                             themeMode.value = prefs.theme
+                            adbConnected.value = WirelessAdb.connected(this@MainActivity)
                             Shell.prewarm()
+                            // 이전에 페어링한 적 있으면 백그라운드로 무선 재연결 시도
+                            if (!adbConnected.value && state.value != Shell.State.READY) {
+                                lifecycleScope.launch {
+                                    if (WirelessAdb.autoConnect(this@MainActivity)) adbConnected.value = true
+                                }
+                            }
                         }
                     }
                     owner.lifecycle.addObserver(obs)
@@ -85,6 +96,8 @@ class MainActivity : ComponentActivity() {
                 HomeScreen(
                     state = state.value,
                     history = history.value,
+                    adbConnected = adbConnected.value,
+                    onOpenPairing = { startActivity(Intent(this, PairingActivity::class.java)) },
                     onPrimary = {
                         when (state.value) {
                             Shell.State.NO_PERMISSION ->
@@ -155,6 +168,8 @@ private fun themeDark(mode: Prefs.ThemeMode): Boolean? = when (mode) {
 private fun HomeScreen(
     state: Shell.State,
     history: List<Prefs.HistoryItem>,
+    adbConnected: Boolean,
+    onOpenPairing: () -> Unit,
     onPrimary: () -> Unit,
     onOpenShizuku: () -> Unit,
     onPickFiles: () -> Unit,
@@ -201,6 +216,9 @@ private fun HomeScreen(
 
             Spacer(Modifier.height(16.dp))
             StatusCard(state, onPrimary, onOpenShizuku)
+
+            Spacer(Modifier.height(12.dp))
+            WirelessCard(adbConnected, onOpenPairing)
 
             if (history.isNotEmpty()) {
                 Spacer(Modifier.height(16.dp))
@@ -299,6 +317,40 @@ private fun StatusCard(state: Shell.State, onPrimary: () -> Unit, onOpenShizuku:
                     Text(diag, fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace, fontSize = 11.5.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, lineHeight = 17.sp)
                 }
             }
+        }
+    }
+}
+
+@Composable
+private fun WirelessCard(connected: Boolean, onOpenPairing: () -> Unit) {
+    Card(
+        modifier = Modifier.fillMaxWidth().clickable(onClick = onOpenPairing), shape = RoundedCornerShape(24.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
+    ) {
+        Row(Modifier.padding(20.dp), verticalAlignment = Alignment.CenterVertically) {
+            Box(
+                Modifier.size(40.dp).clip(RoundedCornerShape(12.dp))
+                    .background((if (connected) Mint else MaterialTheme.colorScheme.primary).copy(alpha = 0.14f)),
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(
+                    if (connected) Icons.Rounded.Wifi else Icons.Rounded.WifiFind,
+                    null, tint = if (connected) Mint else MaterialTheme.colorScheme.primary, modifier = Modifier.size(22.dp),
+                )
+            }
+            Spacer(Modifier.width(14.dp))
+            Column(Modifier.weight(1f)) {
+                Text(
+                    if (connected) "무선으로 연결됨" else "무선 디버깅으로 연결",
+                    fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurface,
+                )
+                Text(
+                    if (connected) "Shizuku 없이 막힌 앱 설치 가능" else "Shizuku·PC 없이 앱에서 바로 페어링",
+                    fontSize = 12.5.sp, color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            Icon(Icons.Rounded.ChevronRight, null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
         }
     }
 }

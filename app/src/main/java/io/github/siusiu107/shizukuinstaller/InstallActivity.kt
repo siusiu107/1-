@@ -93,7 +93,7 @@ private fun InstallSheet(uris: List<Uri>, downloadUrl: String?, prefs: Prefs, on
     var phase by remember { mutableStateOf(Phase.PARSING) }
     var info by remember { mutableStateOf<ApkInfo?>(null) }
     var apks by remember { mutableStateOf<List<ApkSources.Apk>>(emptyList()) }
-    val shizukuReady = remember { Shell.state() == Shell.State.READY }
+    val shizukuReady = remember { PrivilegedInstaller.available(context) }
     var engine by remember {
         mutableStateOf(
             when (prefs.defaultEngine) {
@@ -144,7 +144,8 @@ private fun InstallSheet(uris: List<Uri>, downloadUrl: String?, prefs: Prefs, on
             try {
                 if (withEngine == Engine.SHIZUKU) {
                     withContext(Dispatchers.IO) {
-                        ShizukuInstaller.install(
+                        PrivilegedInstaller.install(
+                            context = context,
                             apks = apks,
                             grantPermissions = optGrant,
                             oldSdkCompat = optCompat,
@@ -308,7 +309,7 @@ private fun Body(
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 if (offerShizuku) {
                     Button(onClick = { onInstall(Engine.SHIZUKU) }, modifier = Modifier.weight(1f)) {
-                        Icon(Icons.Rounded.Bolt, null, modifier = Modifier.size(18.dp)); Spacer(Modifier.width(6.dp)); Text("Shizuku 로 설치")
+                        Icon(Icons.Rounded.Bolt, null, modifier = Modifier.size(18.dp)); Spacer(Modifier.width(6.dp)); Text("빠르게 설치")
                     }
                     FilledTonalButton(onClick = onClose) { Text("닫기") }
                 } else {
@@ -324,7 +325,7 @@ private fun Body(
                 Spacer(Modifier.height(12.dp))
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     FilterChip(engine == Engine.NORMAL, { onSetEngine(Engine.NORMAL) }, { Text("일반 설치") })
-                    FilterChip(engine == Engine.SHIZUKU, { onSetEngine(Engine.SHIZUKU) }, { Text("Shizuku") },
+                    FilterChip(engine == Engine.SHIZUKU, { onSetEngine(Engine.SHIZUKU) }, { Text("빠른 설치") },
                         leadingIcon = { Icon(Icons.Rounded.Bolt, null, modifier = Modifier.size(16.dp)) })
                 }
                 if (engine == Engine.SHIZUKU) {
@@ -405,8 +406,8 @@ private fun EngineBanner(engine: Engine, shizukuReady: Boolean, needsCompat: Boo
     }
     val icon = if (useShizuku) Icons.Rounded.Bolt else if (needsCompat && !shizukuReady) Icons.Rounded.Info else Icons.Rounded.Android
     val text = when {
-        useShizuku -> "Shizuku 로 설치돼요 (막힌 앱도 OK)"
-        needsCompat && !shizukuReady -> "구버전 앱이에요. 막히면 Shizuku 를 켜고 다시 설치하세요."
+        useShizuku -> "빠른 설치로 진행해요 (막힌 앱도 OK)"
+        needsCompat && !shizukuReady -> "구버전 앱이에요. Shizuku 또는 무선 연결을 켜면 설치돼요."
         else -> "일반 설치로 진행해요"
     }
     Row(

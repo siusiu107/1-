@@ -4,8 +4,15 @@
 
     <!-- 일반 설치(시스템 설치관리자) 폴백에 필요 -->
     <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
-    <!-- 링크(URL)로 설치 기능 -->
+    <!-- 링크(URL)로 설치 기능 + 자체 무선 ADB 페어링 -->
     <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+    <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
+
+    <!-- libadb-android 가 끌고 들어오는 민감 권한 제거 (우리 사용엔 불필요, Play 안전화) -->
+    <uses-permission android:name="android.permission.READ_PHONE_STATE" tools:node="remove" />
+    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" tools:node="remove" />
+    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" tools:node="remove" />
 
     <!-- 설치 후 "열기" 버튼용 런처 인텐트 조회 + Shizuku 앱 딥링크. QUERY_ALL_PACKAGES 는 쓰지 않음. -->
     <queries>
@@ -40,6 +47,11 @@
 
         <activity
             android:name=".SettingsActivity"
+            android:exported="false"
+            android:parentActivityName=".MainActivity" />
+
+        <activity
+            android:name=".PairingActivity"
             android:exported="false"
             android:parentActivityName=".MainActivity" />
 
