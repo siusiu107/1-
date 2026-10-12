@@ -1,10 +1,15 @@
 package io.github.siusiu107.shizukuinstaller
 
+import android.Manifest
 import android.content.Intent
+import android.content.pm.PackageManager
+import android.os.Build
 import android.os.Bundle
 import android.provider.Settings
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
@@ -25,6 +30,10 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.core.app.NotificationManagerCompat
+import androidx.core.content.ContextCompat
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import io.github.siusiu107.shizukuinstaller.pkg.Prefs
 import io.github.siusiu107.shizukuinstaller.pkg.WirelessAdb
@@ -60,6 +69,45 @@ private fun PairingScreen(onBack: () -> Unit) {
     var connectPort by remember { mutableStateOf("") }
     var step by remember { mutableStateOf(if (WirelessAdb.connected(context)) Step.DONE else Step.IDLE) }
     var message by remember { mutableStateOf("") }
+    var notifStarted by remember { mutableStateOf(false) }
+
+    // 설정/알림에서 페어링이 끝나고 돌아오면 연결 상태 반영
+    val owner = LocalLifecycleOwner.current
+    DisposableEffect(owner) {
+        val obs = LifecycleEventObserver { _, e ->
+            if (e == Lifecycle.Event.ON_RESUME && WirelessAdb.connected(context)) step = Step.DONE
+        }
+        owner.lifecycle.addObserver(obs)
+        onDispose { owner.lifecycle.removeObserver(obs) }
+    }
+
+    fun launchNotifPairing() {
+        PairingService.start(context)
+        notifStarted = true
+        if (step == Step.ERROR) { step = Step.IDLE; message = "" }
+        runCatching { context.startActivity(Intent(Settings.ACTION_APPLICATION_DEVELOPMENT_SETTINGS)) }
+    }
+
+    val notifPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+        if (granted) launchNotifPairing()
+        else {
+            step = Step.ERROR
+            message = "알림 권한이 있어야 알림에서 코드를 입력할 수 있어요. 설정에서 쓱설치 알림을 허용해 주세요."
+        }
+    }
+
+    fun beginNotifPairing() {
+        if (Build.VERSION.SDK_INT >= 33 &&
+            ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
+        ) {
+            notifPermission.launch(Manifest.permission.POST_NOTIFICATIONS)
+        } else if (!NotificationManagerCompat.from(context).areNotificationsEnabled()) {
+            step = Step.ERROR
+            message = "쓱설치 알림이 꺼져 있어요. 설정에서 알림을 켜 주세요."
+        } else {
+            launchNotifPairing()
+        }
+    }
 
     // mDNS 로 페어링 포트 자동 채우기 (best-effort)
     LaunchedEffect(Unit) {
@@ -108,6 +156,9 @@ private fun PairingScreen(onBack: () -> Unit) {
                     Spacer(Modifier.height(16.dp))
                 }
 
+                NotifPairCard(started = notifStarted, onStart = { beginNotifPairing() })
+                Spacer(Modifier.height(16.dp))
+
                 InfoCard()
                 Spacer(Modifier.height(12.dp))
                 OutlinedButton(
@@ -121,7 +172,7 @@ private fun PairingScreen(onBack: () -> Unit) {
                 }
 
                 Spacer(Modifier.height(20.dp))
-                Text("'페어링 코드로 기기 페어링' 창의 값", fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.primary)
+                Text("또는 직접 입력 (분할 화면 등으로 코드를 보면서)", fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.primary)
                 Spacer(Modifier.height(10.dp))
                 OutlinedTextField(
                     value = code, onValueChange = { code = it.filter { ch -> ch.isDigit() }.take(6) },
@@ -207,6 +258,48 @@ private fun InfoCard() {
             Row(Modifier.padding(vertical = 3.dp)) {
                 Text("${i + 1}. ", fontSize = 13.sp, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
                 Text(t, fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, lineHeight = 19.sp)
+            }
+        }
+    }
+}
+
+@Composable
+private fun NotifPairCard(started: Boolean, onStart: () -> Unit) {
+    Column(
+        Modifier.fillMaxWidth().clip(RoundedCornerShape(20.dp)).background(Brand.copy(alpha = 0.10f)).padding(18.dp),
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Icon(Icons.Rounded.NotificationsActive, null, tint = Brand, modifier = Modifier.size(22.dp))
+            Spacer(Modifier.width(10.dp))
+            Text("알림으로 페어링", fontSize = 16.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
+            Spacer(Modifier.width(8.dp))
+            Box(Modifier.clip(RoundedCornerShape(6.dp)).background(Brand).padding(horizontal = 6.dp, vertical = 2.dp)) {
+                Text("추천", fontSize = 11.sp, color = Color.White, fontWeight = FontWeight.Bold)
+            }
+        }
+        Spacer(Modifier.height(8.dp))
+        Text(
+            "설정의 페어링 창을 띄운 채로 알림창을 내려 코드를 입력하면 끝이에요. " +
+                "페어링 창은 다른 앱으로 넘어가면 닫혀서, 이 방식이 가장 편해요.",
+            fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, lineHeight = 19.sp,
+        )
+        Spacer(Modifier.height(14.dp))
+        Button(onClick = onStart, modifier = Modifier.fillMaxWidth().height(48.dp)) {
+            Icon(Icons.Rounded.NotificationsActive, null, modifier = Modifier.size(18.dp))
+            Spacer(Modifier.width(8.dp))
+            Text(if (started) "다시 시작" else "알림으로 페어링 시작")
+        }
+        if (started) {
+            Spacer(Modifier.height(12.dp))
+            listOf(
+                "개발자 옵션 › 무선 디버깅 › '페어링 코드로 기기 페어링' 을 누르세요.",
+                "창이 열린 채로 알림창을 내리고 '코드 입력' 을 누르세요.",
+                "6자리 코드를 입력하면 자동으로 페어링·연결돼요.",
+            ).forEachIndexed { i, t ->
+                Row(Modifier.padding(vertical = 2.dp)) {
+                    Text("${i + 1}. ", fontSize = 13.sp, color = Brand, fontWeight = FontWeight.Bold)
+                    Text(t, fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, lineHeight = 19.sp)
+                }
             }
         }
     }

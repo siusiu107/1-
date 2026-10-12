@@ -64,7 +64,7 @@ class MainActivity : ComponentActivity() {
             val prefs = remember { Prefs(this) }
             val themeMode = remember { mutableStateOf(prefs.theme) }
             SsukTheme(forceDark = themeDark(themeMode.value)) {
-                val state = remember { mutableStateOf(Shell.state()) }
+                val state = remember { mutableStateOf(Shell.state(this@MainActivity)) }
                 stateHolder = state
                 val history = remember { mutableStateOf(prefs.history()) }
                 val adbConnected = remember { mutableStateOf(WirelessAdb.connected(this)) }
@@ -72,7 +72,7 @@ class MainActivity : ComponentActivity() {
                 DisposableEffect(owner) {
                     val obs = LifecycleEventObserver { _, e ->
                         if (e == Lifecycle.Event.ON_RESUME) {
-                            state.value = Shell.state()
+                            state.value = Shell.state(this@MainActivity)
                             history.value = prefs.history()
                             themeMode.value = prefs.theme
                             adbConnected.value = WirelessAdb.connected(this@MainActivity)
@@ -103,7 +103,7 @@ class MainActivity : ComponentActivity() {
                             Shell.State.NO_PERMISSION ->
                                 if (Shizuku.shouldShowRequestPermissionRationale()) openShizuku()
                                 else Shizuku.requestPermission(reqCode)
-                            else -> state.value = Shell.state()
+                            else -> state.value = Shell.state(this@MainActivity)
                         }
                     },
                     onOpenShizuku = { openShizuku() },
@@ -131,7 +131,7 @@ class MainActivity : ComponentActivity() {
         Shizuku.removeBinderDeadListener(binderDead)
     }
 
-    private fun refresh() { stateHolder?.value = Shell.state() }
+    private fun refresh() { stateHolder?.value = Shell.state(this) }
 
     private fun installUris(uris: List<Uri>) {
         val intent = Intent(this, InstallActivity::class.java).apply {
@@ -274,7 +274,8 @@ private fun StatusCard(state: Shell.State, onPrimary: () -> Unit, onOpenShizuku:
     val (dot, title, desc) = when (state) {
         Shell.State.READY -> Triple(Mint, "Shizuku 준비됨", "막힌 앱도 쓱 설치할 수 있어요 (${Shell.backendName()} 권한).")
         Shell.State.NO_PERMISSION -> Triple(Warn, "권한이 필요해요", "쓱설치에 Shizuku 권한을 한 번 허용해 주세요.")
-        Shell.State.NOT_RUNNING -> Triple(MaterialTheme.colorScheme.onSurfaceVariant, "Shizuku 꺼짐", "일반 설치는 바로 돼요. 막힌 앱까지 설치하려면 Shizuku 를 켜세요.")
+        Shell.State.NOT_INSTALLED -> Triple(MaterialTheme.colorScheme.onSurfaceVariant, "Shizuku 미설치", "일반 설치는 바로 돼요. 막힌 앱은 Shizuku 를 설치하거나, 아래 '무선 디버깅으로 연결' 을 쓰면 돼요.")
+        Shell.State.NOT_RUNNING -> Triple(MaterialTheme.colorScheme.onSurfaceVariant, "Shizuku 꺼짐", "Shizuku 가 설치돼 있지만 실행 중이 아니에요. Shizuku 를 열어 시작해 주세요.")
         Shell.State.TOO_OLD -> Triple(Warn, "Shizuku 업데이트 필요", "Shizuku 를 최신(v11+) 으로 올려 주세요.")
     }
     val dotColor by animateColorAsState(dot, label = "dot")
@@ -296,6 +297,10 @@ private fun StatusCard(state: Shell.State, onPrimary: () -> Unit, onOpenShizuku:
                 when (state) {
                     Shell.State.NO_PERMISSION -> Button(onClick = onPrimary, modifier = Modifier.weight(1f)) { Text("권한 허용") }
                     Shell.State.READY -> FilledTonalButton(onClick = onPrimary, modifier = Modifier.weight(1f)) { Text("상태 새로고침") }
+                    Shell.State.NOT_INSTALLED -> {
+                        Button(onClick = onOpenShizuku, modifier = Modifier.weight(1f)) { Text("Shizuku 설치하기") }
+                        FilledTonalButton(onClick = onPrimary) { Text("새로고침") }
+                    }
                     else -> {
                         Button(onClick = onOpenShizuku, modifier = Modifier.weight(1f)) { Text("Shizuku 열기") }
                         FilledTonalButton(onClick = onPrimary) { Text("새로고침") }
@@ -304,7 +309,8 @@ private fun StatusCard(state: Shell.State, onPrimary: () -> Unit, onOpenShizuku:
             }
             Spacer(Modifier.height(10.dp))
             var showDiag by remember { mutableStateOf(false) }
-            val diag = remember(state, showDiag) { if (showDiag) Shell.diagnostics() else "" }
+            val ctx = androidx.compose.ui.platform.LocalContext.current
+            val diag = remember(state, showDiag) { if (showDiag) Shell.diagnostics(ctx) else "" }
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text("Android ${Build.VERSION.RELEASE} · API ${Build.VERSION.SDK_INT}", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 Spacer(Modifier.weight(1f))

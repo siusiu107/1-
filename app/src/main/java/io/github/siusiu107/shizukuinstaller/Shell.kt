@@ -1,6 +1,7 @@
 package io.github.siusiu107.shizukuinstaller
 
 import android.content.ComponentName
+import android.content.Context
 import android.content.ServiceConnection
 import android.content.pm.PackageManager
 import android.os.IBinder
@@ -12,15 +13,28 @@ import java.util.concurrent.TimeUnit
 /** Shizuku 상태 확인 + UserService(ShellService) 연결 관리 */
 object Shell {
 
-    enum class State { NOT_RUNNING, TOO_OLD, NO_PERMISSION, READY }
+    enum class State { NOT_INSTALLED, NOT_RUNNING, TOO_OLD, NO_PERMISSION, READY }
 
     data class Result(val code: Int, val output: String) {
         val ok: Boolean get() = code == 0
     }
 
-    fun state(): State {
+    const val SHIZUKU_PACKAGE = "moe.shizuku.privileged.api"
+
+    /** Shizuku 앱 패키지가 실제로 설치돼 있는지 (매니페스트 <queries> 로 가시성 확보). */
+    fun isInstalled(context: Context): Boolean = runCatching {
+        context.packageManager.getPackageInfo(SHIZUKU_PACKAGE, 0); true
+    }.getOrDefault(false)
+
+    /**
+     * @param context 주면 '미설치' 와 '설치됐지만 꺼짐' 을 구분한다.
+     *                (바인더가 살아 있으면 Sui/루트 제공일 수 있으므로 패키지 유무와 무관하게 진행)
+     */
+    fun state(context: Context? = null): State {
         val alive = runCatching { Shizuku.pingBinder() }.getOrDefault(false)
-        if (!alive) return State.NOT_RUNNING
+        if (!alive) {
+            return if (context != null && !isInstalled(context)) State.NOT_INSTALLED else State.NOT_RUNNING
+        }
         return try {
             if (Shizuku.isPreV11()) return State.TOO_OLD
             if (Shizuku.checkSelfPermission() != PackageManager.PERMISSION_GRANTED) return State.NO_PERMISSION
@@ -36,13 +50,14 @@ object Shell {
     }
 
     /** 상태 화면의 '자세히' 에 보여줄 원시 신호 (문제 진단용). */
-    fun diagnostics(): String {
+    fun diagnostics(context: Context? = null): String {
         fun s(block: () -> Any?): String = runCatching { block()?.toString() ?: "null" }
             .getOrElse { "오류(${it.javaClass.simpleName})" }
         val perm = runCatching {
             if (Shizuku.checkSelfPermission() == PackageManager.PERMISSION_GRANTED) "허용됨" else "거부됨"
         }.getOrElse { "오류(${it.javaClass.simpleName})" }
-        return "pingBinder=${s { Shizuku.pingBinder() }}\n" +
+        return (if (context != null) "installed=${isInstalled(context)}\n" else "") +
+            "pingBinder=${s { Shizuku.pingBinder() }}\n" +
             "preV11=${s { Shizuku.isPreV11() }}\n" +
             "permission=$perm\n" +
             "uid=${s { Shizuku.getUid() }}\n" +

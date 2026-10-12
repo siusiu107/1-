@@ -8,6 +8,11 @@
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
+    <!-- 알림 입력(RemoteInput)으로 페어링: 알림 + 포그라운드 서비스(mDNS 탐색 유지) -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_CONNECTED_DEVICE" />
+    <uses-permission android:name="android.permission.CHANGE_WIFI_MULTICAST_STATE" />
 
     <!-- libadb-android 가 끌고 들어오는 민감 권한 제거 (우리 사용엔 불필요, Play 안전화) -->
     <uses-permission android:name="android.permission.READ_PHONE_STATE" tools:node="remove" />
@@ -59,6 +64,11 @@
             android:name=".GuideActivity"
             android:exported="false"
             android:parentActivityName=".MainActivity" />
+
+        <service
+            android:name=".PairingService"
+            android:exported="false"
+            android:foregroundServiceType="connectedDevice" />
 
         <activity
             android:name=".InstallActivity"

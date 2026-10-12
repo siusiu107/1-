@@ -40,9 +40,9 @@ class GuideActivity : ComponentActivity() {
     private val reqCode = 3003
     private var stateHolder: MutableState<Shell.State>? = null
     private val permListener = Shizuku.OnRequestPermissionResultListener { code, _ ->
-        if (code == reqCode) stateHolder?.value = Shell.state()
+        if (code == reqCode) stateHolder?.value = Shell.state(this)
     }
-    private val binderReceived = Shizuku.OnBinderReceivedListener { stateHolder?.value = Shell.state() }
+    private val binderReceived = Shizuku.OnBinderReceivedListener { stateHolder?.value = Shell.state(this) }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -58,14 +58,14 @@ class GuideActivity : ComponentActivity() {
                     Prefs.ThemeMode.SYSTEM -> null
                 },
             ) {
-                val state = remember { mutableStateOf(Shell.state()) }
+                val state = remember { mutableStateOf(Shell.state(this@GuideActivity)) }
                 stateHolder = state
                 val adb = remember { mutableStateOf(WirelessAdb.connected(this)) }
                 val owner = LocalLifecycleOwner.current
                 DisposableEffect(owner) {
                     val obs = LifecycleEventObserver { _, e ->
                         if (e == Lifecycle.Event.ON_RESUME) {
-                            state.value = Shell.state(); adb.value = WirelessAdb.connected(this@GuideActivity)
+                            state.value = Shell.state(this@GuideActivity); adb.value = WirelessAdb.connected(this@GuideActivity)
                         }
                     }
                     owner.lifecycle.addObserver(obs)
@@ -163,13 +163,18 @@ private fun GuideScreen(
                     title = "② Shizuku", subtitle = "빠르고 강력 · 막힌 앱도 설치",
                     done = shizukuDone, doneText = "준비됨",
                 ) {
-                    StepLine(1, "Shizuku 앱 설치", state != Shell.State.NOT_RUNNING || shizukuDone)
-                    StepLine(2, "Shizuku 실행 (무선 디버깅 또는 루트)", state == Shell.State.NO_PERMISSION || shizukuDone)
+                    val installed = state != Shell.State.NOT_INSTALLED
+                    val running = state == Shell.State.NO_PERMISSION || state == Shell.State.READY || state == Shell.State.TOO_OLD
+                    StepLine(1, "Shizuku 앱 설치", installed)
+                    StepLine(2, "Shizuku 실행 (무선 디버깅 또는 루트)", running)
                     StepLine(3, "쓱설치에 권한 허용", shizukuDone)
                     Spacer(Modifier.height(12.dp))
                     when (state) {
+                        Shell.State.NOT_INSTALLED -> Button(onClick = onInstallShizuku, modifier = Modifier.fillMaxWidth()) {
+                            Icon(Icons.Rounded.Download, null, modifier = Modifier.size(18.dp)); Spacer(Modifier.width(8.dp)); Text("Shizuku 설치 (Play 스토어)")
+                        }
                         Shell.State.NOT_RUNNING -> Button(onClick = onInstallShizuku, modifier = Modifier.fillMaxWidth()) {
-                            Icon(Icons.Rounded.Download, null, modifier = Modifier.size(18.dp)); Spacer(Modifier.width(8.dp)); Text("Shizuku 설치 / 실행")
+                            Icon(Icons.Rounded.PlayArrow, null, modifier = Modifier.size(18.dp)); Spacer(Modifier.width(8.dp)); Text("Shizuku 열어서 시작")
                         }
                         Shell.State.NO_PERMISSION -> Button(onClick = onRequestShizuku, modifier = Modifier.fillMaxWidth()) {
                             Icon(Icons.Rounded.Check, null, modifier = Modifier.size(18.dp)); Spacer(Modifier.width(8.dp)); Text("쓱설치에 권한 허용")
