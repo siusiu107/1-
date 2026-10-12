@@ -1,46 +1,44 @@
-# Shizuku 설치기 (Shizuku Installer)
+# 쓱설치 (Ssuk Install)
 
-[Shizuku](https://shizuku.rikka.app/)의 adb(또는 root) 권한을 빌려 `pm install` 세션으로
-APK를 **강제 설치**하는 작은 안드로이드 앱입니다. 패키지 관리자 기본 설치 화면 대신,
-APK를 열 때 **"다음으로 열기 / 공유"** 목록에 뜨는 **"Shizuku로 설치"** 항목으로 바로 설치합니다.
+**탭 한 번, 쓱 설치.** APK를 공유하거나 열면 바로 설치되는 안드로이드 설치 도우미입니다.
 
-## 특징
+- **일반 설치가 기본** — 시스템 설치관리자로 평범하게 설치. Shizuku 없이도 바로 사용.
+- **막히면 Shizuku 로 구제** — "앱을 설치할 수 없음", 구버전 앱(Android 14+ targetSdk 차단) 등으로
+  일반 설치가 막히면, Shizuku(adb/root) 권한으로 `pm install` 세션을 돌려 설치합니다.
+- **분할 APK 지원** — `.apk` 는 물론 `.apks` / `.xapk` / `.apkm` 묶음을 한 세션으로 설치.
+- **깔끔한 설치 시트** — 설치 전 앱 아이콘·이름·버전·크기·분할 수와 배지(업데이트/낮은 버전/구버전 앱)를 보여줍니다.
+- **Material 3 / 머티리얼 유** — 기기 테마색을 따라가는 라이트·다크 UI.
 
-- openwith 지원: 파일 관리자에서 APK 탭 → "Shizuku로 설치" 선택, 또는 공유 메뉴에서 선택
-- 단일 `.apk`는 물론 `.apks` / `.xapk` / `.apkm` 분할 APK 묶음도 설치 (내부 apk를 한 세션으로 커밋)
-- `pm install-create → install-write(stdin 스트리밍) → install-commit` 세션 방식이라
-  셸(uid 2000)이 앱 전용 파일을 못 읽는 문제를 피함
-- `-r -g` 옵션으로 재설치 허용 + 런타임 권한 자동 부여
-- adb / root 어느 백엔드로 Shizuku가 돌든 동작
+## 설계 메모 (포지셔닝)
 
-## 요구 사항
+- 사용자에게 보이는 기본 경로는 **일반 설치**이고, Shizuku 는 "막혔을 때 설치" 구제 수단으로만 노출합니다.
+- `QUERY_ALL_PACKAGES` 는 쓰지 않습니다. 열기 버튼/공유 노출은 `<queries>` + MIME intent-filter 로만 처리합니다.
+- 구버전 앱 호환 설치(`--bypass-low-target-sdk-block`)는 필요할 때 자동으로만 적용합니다.
+- 서명 불일치 업데이트는 어떤 권한으로도 불가능하므로, UI 에서 정직하게 안내합니다.
 
-1. [Shizuku](https://shizuku.rikka.app/) 설치 후 서비스 시작 (무선 디버깅 또는 PC adb)
-2. 이 앱을 실행하고 **Shizuku 권한 허용**
+## 기술 구조
+
+| 파일 | 역할 |
+|------|------|
+| `MainActivity` | 홈 — 브랜드, Shizuku 상태, 사용법 (Compose) |
+| `InstallActivity` | openwith 진입점. 설치 바텀시트 (Compose) |
+| `pkg/ApkSources` | URI → 캐시 APK 파일 전개 (.apks/.xapk/.apkm 포함) |
+| `pkg/ApkInfo` | base APK 메타데이터 파싱 |
+| `pkg/NormalInstaller` | 시스템 PackageInstaller 세션 (일반 설치) |
+| `pkg/ShizukuInstaller` | Shizuku 셸 `pm install` 세션 (구제 설치) |
+| `Shell` + `ShellService` + `IShellService.aidl` | Shizuku UserService (adb/root 프로세스 실행) |
 
 ## 빌드
 
 ```bash
-./gradlew :app:assembleRelease
-# 결과물: app/build/outputs/apk/release/app-release.apk
+./gradlew :app:assembleRelease   # app/build/outputs/apk/release/app-release.apk
+./gradlew :app:assembleDebug
 ```
 
-저장소에 포함된 고정 키(`app/shared.keystore`, 비밀번호 `android`)로 서명되므로
-어디서 빌드하든 동일한 서명으로 업데이트 설치가 가능합니다.
-(이 키는 공개된 데모용이며, 실제 배포에는 자신의 키를 쓰세요.)
+저장소에 포함된 고정 키(`app/shared.keystore`, 비밀번호 `android`)로 서명됩니다. 공개 데모용 키이니
+실제 배포에는 본인 키를 쓰세요.
 
-## 사용법
+## 요구 사항
 
-1. Shizuku를 시작하고 이 앱에 권한을 허용합니다.
-2. 파일 관리자/브라우저에서 APK를 열거나 공유합니다.
-3. 목록에서 **"Shizuku로 설치"**를 고르면 설치 화면이 뜨고, **설치**를 누르면 바로 설치됩니다.
-
-## 구조
-
-| 파일 | 역할 |
-|------|------|
-| `MainActivity` | Shizuku 상태 표시 / 권한 요청 |
-| `InstallActivity` | openwith 진입점. 설치 UI |
-| `Installer` | zip 묶음 전개 + `pm install` 세션 처리 |
-| `Shell` | Shizuku UserService 연결 관리 |
-| `ShellService` + `IShellService.aidl` | adb/root 권한 프로세스에서 명령 실행 |
+- 일반 설치: 추가 요구 없음(시스템이 "알 수 없는 출처" 1회 허용을 요청).
+- Shizuku 설치: [Shizuku](https://shizuku.rikka.app/) 실행 + 이 앱에 권한 허용.

@@ -1,12 +1,20 @@
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
-    android:width="108dp"
-    android:height="108dp"
-    android:viewportWidth="108"
-    android:viewportHeight="108">
-    <path
-        android:fillColor="#FFFFFF"
-        android:pathData="M54,30 L54,30 C55.1,30 56,30.9 56,32 L56,58 L66,58 C67.8,58 68.7,60.2 67.4,61.4 L55.4,73.4 C54.6,74.2 53.4,74.2 52.6,73.4 L40.6,61.4 C39.3,60.2 40.2,58 42,58 L52,58 L52,32 C52,30.9 52.9,30 54,30 Z" />
-    <path
-        android:fillColor="#FFFFFF"
-        android:pathData="M38,78 L70,78 C71.1,78 72,78.9 72,80 C72,81.1 71.1,82 70,82 L38,82 C36.9,82 36,81.1 36,80 C36,78.9 36.9,78 38,78 Z" />
+    android:width="108dp" android:height="108dp"
+    android:viewportWidth="108" android:viewportHeight="108">
+    <group android:translateX="6">
+        <!-- speed lines (쓱) -->
+        <path android:fillColor="#FFFFFF" android:fillAlpha="0.55"
+            android:pathData="M26,41 L41,41 A2.5,2.5 0 0 1 41,46 L26,46 A2.5,2.5 0 0 1 26,41 Z" />
+        <path android:fillColor="#FFFFFF" android:fillAlpha="0.85"
+            android:pathData="M22,52 L38,52 A2.5,2.5 0 0 1 38,57 L22,57 A2.5,2.5 0 0 1 22,52 Z" />
+        <!-- arrow shaft -->
+        <path android:fillColor="#FFFFFF"
+            android:pathData="M51,30 L59,30 A1,1 0 0 1 60,31 L60,56 L50,56 L50,31 A1,1 0 0 1 51,30 Z" />
+        <!-- arrow head -->
+        <path android:fillColor="#FFFFFF"
+            android:pathData="M41,54 L69,54 A2,2 0 0 1 70.6,57.2 L56.6,74.2 A2,2 0 0 1 53.4,74.2 L39.4,57.2 A2,2 0 0 1 41,54 Z" />
+        <!-- tray / baseline -->
+        <path android:fillColor="#FFFFFF"
+            android:pathData="M38,80 L70,80 A3,3 0 0 1 73,83 A3,3 0 0 1 70,86 L38,86 A3,3 0 0 1 35,83 A3,3 0 0 1 38,80 Z" />
+    </group>
 </vector>

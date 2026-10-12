@@ -1,6 +1,7 @@
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
+    id("org.jetbrains.kotlin.plugin.compose")
 }
 
 android {
@@ -13,10 +14,10 @@ android {
         targetSdk = 36
         versionCode = 1
         versionName = "1.0"
+        vectorDrawables { useSupportLibrary = true }
     }
 
     signingConfigs {
-        // 저장소에 포함된 키로 서명해서, 어디서 빌드하든 같은 서명으로 업데이트 설치가 되도록 함
         create("shared") {
             storeFile = file("shared.keystore")
             storePassword = "android"
@@ -38,6 +39,7 @@ android {
     buildFeatures {
         aidl = true
         buildConfig = true
+        compose = true
     }
 
     compileOptions {
@@ -53,7 +55,22 @@ kotlin {
 }
 
 dependencies {
-    implementation("androidx.appcompat:appcompat:1.7.1")
+    implementation("androidx.core:core-ktx:1.16.0")
+    implementation("androidx.activity:activity-compose:1.10.1")
+    implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.8.7")
+    implementation("androidx.lifecycle:lifecycle-runtime-compose:2.8.7")
+    implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.8.7")
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.9.0")
+
+    val composeBom = platform("androidx.compose:compose-bom:2025.08.01")
+    implementation(composeBom)
+    implementation("androidx.compose.ui:ui")
+    implementation("androidx.compose.ui:ui-graphics")
+    implementation("androidx.compose.ui:ui-tooling-preview")
+    implementation("androidx.compose.material3:material3")
+    implementation("androidx.compose.material:material-icons-extended")
+    debugImplementation("androidx.compose.ui:ui-tooling")
+
     implementation("dev.rikka.shizuku:api:13.1.5")
     implementation("dev.rikka.shizuku:provider:13.1.5")
 }

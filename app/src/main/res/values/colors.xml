@@ -1,5 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <color name="purple">#6750A4</color>
-    <color name="purple_dark">#D0BCFF</color>
+    <color name="brand">#6C4CF1</color>
+    <color name="brand_dark">#3A2E7A</color>
+    <color name="window_light">#F6F4FF</color>
+    <color name="window_dark">#121019</color>
 </resources>
