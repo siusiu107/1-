@@ -77,10 +77,10 @@ class MainActivity : ComponentActivity() {
                             themeMode.value = prefs.theme
                             adbConnected.value = WirelessAdb.connected(this@MainActivity)
                             Shell.prewarm()
-                            // 이전에 페어링한 적 있으면 백그라운드로 무선 재연결 시도
+                            // 페어링한 적 있으면(Android 11+) 백그라운드로 무선 재연결 — 동시에 하나만, 메인 스레드 안 막음
                             if (!adbConnected.value && state.value != Shell.State.READY) {
                                 lifecycleScope.launch {
-                                    if (WirelessAdb.autoConnect(this@MainActivity)) adbConnected.value = true
+                                    if (WirelessAdb.reconnectInBackground(this@MainActivity)) adbConnected.value = true
                                 }
                             }
                         }

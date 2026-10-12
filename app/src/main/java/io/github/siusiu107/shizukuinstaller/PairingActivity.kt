@@ -75,7 +75,11 @@ private fun PairingScreen(onBack: () -> Unit) {
     val owner = LocalLifecycleOwner.current
     DisposableEffect(owner) {
         val obs = LifecycleEventObserver { _, e ->
-            if (e == Lifecycle.Event.ON_RESUME && WirelessAdb.connected(context)) step = Step.DONE
+            if (e == Lifecycle.Event.ON_RESUME) {
+                // 락 없는 확인이라 메인 스레드에서 안전. 끊겼으면 '연결됨' 표시도 내린다
+                if (WirelessAdb.connected(context)) step = Step.DONE
+                else if (step == Step.DONE) step = Step.IDLE
+            }
         }
         owner.lifecycle.addObserver(obs)
         onDispose { owner.lifecycle.removeObserver(obs) }
@@ -156,7 +160,11 @@ private fun PairingScreen(onBack: () -> Unit) {
                     Spacer(Modifier.height(16.dp))
                 }
 
-                NotifPairCard(started = notifStarted, onStart = { beginNotifPairing() })
+                NotifPairCard(
+                    started = notifStarted,
+                    supported = Build.VERSION.SDK_INT >= 30,
+                    onStart = { beginNotifPairing() },
+                )
                 Spacer(Modifier.height(16.dp))
 
                 InfoCard()
@@ -264,7 +272,7 @@ private fun InfoCard() {
 }
 
 @Composable
-private fun NotifPairCard(started: Boolean, onStart: () -> Unit) {
+private fun NotifPairCard(started: Boolean, supported: Boolean, onStart: () -> Unit) {
     Column(
         Modifier.fillMaxWidth().clip(RoundedCornerShape(20.dp)).background(Brand.copy(alpha = 0.10f)).padding(18.dp),
     ) {
@@ -284,10 +292,16 @@ private fun NotifPairCard(started: Boolean, onStart: () -> Unit) {
             fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, lineHeight = 19.sp,
         )
         Spacer(Modifier.height(14.dp))
-        Button(onClick = onStart, modifier = Modifier.fillMaxWidth().height(48.dp)) {
+        Button(onClick = onStart, enabled = supported, modifier = Modifier.fillMaxWidth().height(48.dp)) {
             Icon(Icons.Rounded.NotificationsActive, null, modifier = Modifier.size(18.dp))
             Spacer(Modifier.width(8.dp))
-            Text(if (started) "다시 시작" else "알림으로 페어링 시작")
+            Text(
+                when {
+                    !supported -> "Android 11 이상에서만 지원돼요"
+                    started -> "다시 시작"
+                    else -> "알림으로 페어링 시작"
+                },
+            )
         }
         if (started) {
             Spacer(Modifier.height(12.dp))

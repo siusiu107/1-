@@ -1,11 +1,14 @@
 package io.github.siusiu107.shizukuinstaller.pkg
 
 import android.content.Context
+import android.os.Build
+import io.github.muntashirakon.adb.AdbConnection
 import io.github.muntashirakon.adb.android.AdbMdns
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File
 import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicBoolean
 
 /**
  * 앱이 직접 ADB 클라이언트가 되어 기기의 무선 디버깅 데몬과 페어링/연결하고,
@@ -15,38 +18,78 @@ object WirelessAdb {
 
     class AdbException(message: String) : Exception(message)
 
+    /** 같은 기기의 adbd 는 모든 인터페이스에 바인딩되므로 항상 루프백으로 접속한다. */
+    private const val LOCALHOST = "127.0.0.1"
+
+    /**
+     * 현재 살아 있는 연결. libadb 의 isConnected() 는 매니저 락(mLock)을 잡는데, autoConnect/pair 가
+     * 그 락을 몇 초씩 쥐고 있어서 메인 스레드에서 부르면 ANR 이 난다. 그래서 락 없이 읽을 수 있게 따로 들고 있는다.
+     */
+    @Volatile
+    private var live: AdbConnection? = null
+
+    private val reconnecting = AtomicBoolean(false)
+
+    /** 락을 잡지 않으므로 메인 스레드에서 불러도 안전하다. */
+    @Suppress("UNUSED_PARAMETER")
     fun connected(context: Context): Boolean =
-        runCatching { AdbManager.get(context).isConnected }.getOrDefault(false)
+        live?.let { it.isConnected && it.isConnectionEstablished } == true
+
+    private fun track(m: AdbManager, ok: Boolean): Boolean {
+        if (ok || m.isConnected) live = m.adbConnection
+        return connectedNow()
+    }
+
+    private fun connectedNow(): Boolean = live?.let { it.isConnected && it.isConnectionEstablished } == true
 
     suspend fun pair(context: Context, port: Int, code: String): Boolean = withContext(Dispatchers.IO) {
-        try {
-            AdbManager.get(context).pair(port, code)
+        val ok = try {
+            AdbManager.get(context).pair(LOCALHOST, port, code)
         } catch (t: Throwable) {
             throw AdbException(pairError(t))
         }
+        if (ok) Prefs(context).paired = true
+        ok
     }
 
     suspend fun connect(context: Context, port: Int): Boolean = withContext(Dispatchers.IO) {
         val m = AdbManager.get(context)
         m.setTimeout(30, TimeUnit.SECONDS)
         try {
-            if (m.isConnected) true else m.connect(port)
+            track(m, if (m.isConnected) true else m.connect(LOCALHOST, port))
         } catch (t: Throwable) {
             throw AdbException(connectError(t))
         }
     }
 
     suspend fun autoConnect(context: Context, timeoutMs: Long = 5000): Boolean = withContext(Dispatchers.IO) {
+        if (connectedNow()) return@withContext true
         val m = AdbManager.get(context)
         m.setTimeout(30, TimeUnit.SECONDS)
         try {
-            if (m.isConnected) true else m.autoConnect(context, timeoutMs)
+            track(m, if (m.isConnected) true else m.autoConnect(context, timeoutMs))
         } catch (t: Throwable) {
             false
         }
     }
 
+    /**
+     * 화면 진입 시 조용히 재연결. 페어링한 적이 있고(Android 11+) 아직 연결 안 됐을 때만,
+     * 그리고 동시에 하나만 돈다. (매 onResume 마다 5초짜리 mDNS 탐색이 쌓이지 않게)
+     */
+    suspend fun reconnectInBackground(context: Context): Boolean {
+        if (connectedNow()) return true
+        if (Build.VERSION.SDK_INT < 30 || !Prefs(context).paired) return false
+        if (!reconnecting.compareAndSet(false, true)) return false
+        return try {
+            autoConnect(context)
+        } finally {
+            reconnecting.set(false)
+        }
+    }
+
     suspend fun disconnect(context: Context) = withContext(Dispatchers.IO) {
+        live = null
         runCatching { AdbManager.get(context).disconnect() }
         Unit
     }
@@ -79,8 +122,8 @@ object WirelessAdb {
         allowDowngrade: Boolean,
         log: ApkSources.Logger,
     ) {
+        if (!connectedNow()) throw AdbException("무선 연결이 끊겼어요. 다시 연결해 주세요.")
         val m = AdbManager.get(context)
-        if (!m.isConnected) throw AdbException("무선 연결이 끊겼어요. 다시 연결해 주세요.")
         val flags = buildList {
             add("-r")
             if (grantPermissions) add("-g")

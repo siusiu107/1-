@@ -32,6 +32,7 @@ import androidx.core.graphics.drawable.toBitmap
 import io.github.siusiu107.shizukuinstaller.pkg.*
 import io.github.siusiu107.shizukuinstaller.ui.theme.*
 import kotlinx.coroutines.Dispatchers
+import rikka.shizuku.Shizuku
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
@@ -93,7 +94,9 @@ private fun InstallSheet(uris: List<Uri>, downloadUrl: String?, prefs: Prefs, on
     var phase by remember { mutableStateOf(Phase.PARSING) }
     var info by remember { mutableStateOf<ApkInfo?>(null) }
     var apks by remember { mutableStateOf<List<ApkSources.Apk>>(emptyList()) }
-    val shizukuReady = remember { PrivilegedInstaller.available(context) }
+    // Shizuku 바인더는 콜드스타트 시 늦게 도착할 수 있고, 무선 연결도 백그라운드로 복구되므로 실시간 상태로 둔다
+    var shizukuReady by remember { mutableStateOf(PrivilegedInstaller.available(context)) }
+    var engineTouched by remember { mutableStateOf(false) }
     var engine by remember {
         mutableStateOf(
             when (prefs.defaultEngine) {
@@ -129,14 +132,44 @@ private fun InstallSheet(uris: List<Uri>, downloadUrl: String?, prefs: Prefs, on
             info = parsed.second
             optDowngrade = optDowngrade || parsed.second.isDowngrade
             optCompat = parsed.second.needsOldSdkCompat
-            if (parsed.second.needsOldSdkCompat && shizukuReady) engine = Engine.SHIZUKU
             phase = Phase.READY
         } catch (t: Throwable) {
             errorMsg = t.message ?: "파일을 읽지 못했어요."; phase = Phase.FAILURE
         }
     }
 
+    // Shizuku 바인더 도착/소멸을 실시간 반영
+    DisposableEffect(Unit) {
+        val received = Shizuku.OnBinderReceivedListener {
+            shizukuReady = PrivilegedInstaller.available(context)
+            if (shizukuReady) Shell.prewarm()
+        }
+        val dead = Shizuku.OnBinderDeadListener { shizukuReady = PrivilegedInstaller.available(context) }
+        Shizuku.addBinderReceivedListenerSticky(received)
+        Shizuku.addBinderDeadListener(dead)
+        onDispose {
+            Shizuku.removeBinderReceivedListener(received)
+            Shizuku.removeBinderDeadListener(dead)
+        }
+    }
+
+    // 앱이 꺼져 있다가 파일로 바로 열린 경우: 페어링해 둔 무선 연결을 조용히 복구
+    LaunchedEffect(Unit) {
+        if (!shizukuReady && WirelessAdb.reconnectInBackground(context)) {
+            shizukuReady = PrivilegedInstaller.available(context)
+        }
+    }
+
+    // 사용자가 직접 고르지 않았다면, 가용성/앱 정보가 바뀔 때 기본 엔진을 다시 적용
+    LaunchedEffect(shizukuReady, info) {
+        if (!engineTouched && (phase == Phase.PARSING || phase == Phase.READY)) {
+            val wantFast = prefs.defaultEngine != Prefs.DefaultEngine.NORMAL || info?.needsOldSdkCompat == true
+            engine = if (shizukuReady && wantFast) Engine.SHIZUKU else Engine.NORMAL
+        }
+    }
+
     fun runInstall(withEngine: Engine) {
+        engineTouched = true
         engine = withEngine
         phase = Phase.INSTALLING
         errorMsg = null
@@ -205,7 +238,7 @@ private fun InstallSheet(uris: List<Uri>, downloadUrl: String?, prefs: Prefs, on
                         onOptGrant = { optGrant = it; prefs.grantPermissions = it },
                         onOptDowngrade = { optDowngrade = it },
                         onOptCompat = { optCompat = it },
-                        onInstall = { runInstall(it) }, onSetEngine = { engine = it },
+                        onInstall = { runInstall(it) }, onSetEngine = { engine = it; engineTouched = true },
                         onClose = onClose, context = context,
                     )
                 }
@@ -312,6 +345,10 @@ private fun Body(
                         Icon(Icons.Rounded.Bolt, null, modifier = Modifier.size(18.dp)); Spacer(Modifier.width(6.dp)); Text("빠르게 설치")
                     }
                     FilledTonalButton(onClick = onClose) { Text("닫기") }
+                } else if (engine == Engine.SHIZUKU) {
+                    // 빠른 설치가 실패하면 같은 엔진만 반복하지 않도록 일반 설치로 빠져나갈 길을 준다
+                    FilledTonalButton(onClick = { onInstall(Engine.SHIZUKU) }, modifier = Modifier.weight(1f)) { Text("다시 시도") }
+                    OutlinedButton(onClick = { onInstall(Engine.NORMAL) }) { Text("일반 설치로") }
                 } else {
                     FilledTonalButton(onClick = { onInstall(engine) }, modifier = Modifier.weight(1f)) { Text("다시 시도") }
                     OutlinedButton(onClick = onClose) { Text("닫기") }

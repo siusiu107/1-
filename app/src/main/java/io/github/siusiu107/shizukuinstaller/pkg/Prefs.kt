@@ -26,6 +26,11 @@ class Prefs(context: Context) {
         get() = sp.getBoolean(K_DOWNGRADE, false)
         set(v) = sp.edit().putBoolean(K_DOWNGRADE, v).apply()
 
+    /** 무선 디버깅 페어링에 한 번이라도 성공했는지 (백그라운드 재연결 시도 여부 판단) */
+    var paired: Boolean
+        get() = sp.getBoolean(K_PAIRED, false)
+        set(v) = sp.edit().putBoolean(K_PAIRED, v).apply()
+
     data class HistoryItem(val pkg: String, val label: String, val time: Long)
 
     fun history(): List<HistoryItem> =
@@ -51,5 +56,6 @@ class Prefs(context: Context) {
         const val K_GRANT = "grant_perms"
         const val K_DOWNGRADE = "allow_downgrade"
         const val K_HISTORY = "history"
+        const val K_PAIRED = "adb_paired"
     }
 }

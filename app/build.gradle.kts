@@ -78,4 +78,7 @@ dependencies {
     implementation("com.github.MuntashirAkon:libadb-android:3.1.1")
     implementation("org.bouncycastle:bcprov-jdk15to18:1.81")
     implementation("org.bouncycastle:bcpkix-jdk15to18:1.81")
+    // 페어링(TLS 1.3 exportKeyingMaterial)에 필요. 없으면 libadb 가 숨김 API(com.android.org.conscrypt)를
+    // 리플렉션하다 막혀서 모든 기기에서 페어링이 실패한다.
+    implementation("org.conscrypt:conscrypt-android:2.5.2")
 }
