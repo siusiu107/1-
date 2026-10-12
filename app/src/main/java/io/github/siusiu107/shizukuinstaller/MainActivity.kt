@@ -117,6 +117,7 @@ class MainActivity : ComponentActivity() {
                     },
                     onInstallUrl = { installUrl(it) },
                     onOpenSettings = { startActivity(Intent(this, SettingsActivity::class.java)) },
+                    onOpenGuide = { startActivity(Intent(this, GuideActivity::class.java)) },
                     onOpenApp = { pkg -> packageManager.getLaunchIntentForPackage(pkg)?.let { startActivity(it) } },
                 )
             }
@@ -175,6 +176,7 @@ private fun HomeScreen(
     onPickFiles: () -> Unit,
     onInstallUrl: (String) -> Unit,
     onOpenSettings: () -> Unit,
+    onOpenGuide: () -> Unit,
     onOpenApp: (String) -> Unit,
 ) {
     var showUrlDialog by remember { mutableStateOf(false) }
@@ -187,6 +189,9 @@ private fun HomeScreen(
             // top bar
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                 Spacer(Modifier.weight(1f))
+                IconButton(onClick = onOpenGuide) {
+                    Icon(Icons.Rounded.HelpOutline, "가이드", tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
                 IconButton(onClick = onOpenSettings) {
                     Icon(Icons.Rounded.Settings, "설정", tint = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
