@@ -11,6 +11,7 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -70,6 +71,7 @@ class MainActivity : ComponentActivity() {
                             state.value = Shell.state()
                             history.value = prefs.history()
                             themeMode.value = prefs.theme
+                            Shell.prewarm()
                         }
                     }
                     owner.lifecycle.addObserver(obs)
@@ -278,7 +280,25 @@ private fun StatusCard(state: Shell.State, onPrimary: () -> Unit, onOpenShizuku:
                 }
             }
             Spacer(Modifier.height(10.dp))
-            Text("Android ${Build.VERSION.RELEASE} · API ${Build.VERSION.SDK_INT}", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            var showDiag by remember { mutableStateOf(false) }
+            val diag = remember(state, showDiag) { if (showDiag) Shell.diagnostics() else "" }
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text("Android ${Build.VERSION.RELEASE} · API ${Build.VERSION.SDK_INT}", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Spacer(Modifier.weight(1f))
+                Text(
+                    if (showDiag) "자세히 닫기" else "자세히",
+                    fontSize = 12.sp, color = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.clickable { showDiag = !showDiag }.padding(4.dp),
+                )
+            }
+            AnimatedVisibility(showDiag) {
+                Box(
+                    Modifier.fillMaxWidth().padding(top = 8.dp).clip(RoundedCornerShape(12.dp))
+                        .background(MaterialTheme.colorScheme.surfaceVariant).padding(12.dp),
+                ) {
+                    Text(diag, fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace, fontSize = 11.5.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, lineHeight = 17.sp)
+                }
+            }
         }
     }
 }

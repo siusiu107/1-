@@ -60,12 +60,32 @@ object ApkSources {
                 out += extractBundle(src, dir, index)
             } else {
                 val dest = File(dir, "pkg_${index}_base.apk")
-                src.open().use { input -> dest.outputStream().use { input.copyTo(it, 1 shl 16) } }
+                copyWithProgress(src, dest, log)
                 out += Apk(src.name.ifBlank { "base.apk" }, dest, dest.length(), true)
             }
         }
         if (out.isEmpty()) throw SourceException("설치할 APK 를 찾지 못했어요.")
         return out
+    }
+
+    private fun copyWithProgress(src: Source, dest: File, log: Logger) {
+        src.open().use { input ->
+            dest.outputStream().use { out ->
+                val buf = ByteArray(1 shl 20)
+                var total = 0L
+                var lastTick = 0L
+                while (true) {
+                    val n = input.read(buf)
+                    if (n < 0) break
+                    out.write(buf, 0, n)
+                    total += n
+                    if (total - lastTick > 4L * 1024 * 1024) {
+                        lastTick = total
+                        log.log("준비 중… ${total / (1024 * 1024)} MB")
+                    }
+                }
+            }
+        }
     }
 
     private fun extractBundle(src: Source, dir: File, groupIndex: Int): List<Apk> {
@@ -77,7 +97,7 @@ object ApkSources {
                 val entryName = entry.name.substringAfterLast('/')
                 if (!entry.isDirectory && entryName.lowercase().endsWith(".apk")) {
                     val dest = File(dir, "pkg_${groupIndex}_$n-$entryName")
-                    dest.outputStream().use { zip.copyTo(it, 1 shl 16) }
+                    dest.outputStream().use { zip.copyTo(it, 1 shl 20) }
                     val lower = entryName.lowercase()
                     val isBase = lower == "base.apk" || !(lower.contains("config.") || lower.startsWith("split"))
                     out += Apk(entryName, dest, dest.length(), isBase)

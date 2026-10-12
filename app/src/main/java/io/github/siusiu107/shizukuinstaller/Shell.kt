@@ -19,14 +19,34 @@ object Shell {
     }
 
     fun state(): State {
-        if (!Shizuku.pingBinder()) return State.NOT_RUNNING
-        if (Shizuku.isPreV11()) return State.TOO_OLD
+        val alive = runCatching { Shizuku.pingBinder() }.getOrDefault(false)
+        if (!alive) return State.NOT_RUNNING
         return try {
-            if (Shizuku.checkSelfPermission() == PackageManager.PERMISSION_GRANTED) State.READY
-            else State.NO_PERMISSION
+            if (Shizuku.isPreV11()) return State.TOO_OLD
+            if (Shizuku.checkSelfPermission() != PackageManager.PERMISSION_GRANTED) return State.NO_PERMISSION
+            // 권한이 있다고 캐시돼 있어도 실제로 바인더 트랜잭션이 되는지 확인한다.
+            // (서비스가 죽었거나 권한이 회수됐는데 READY 로 굳는 거짓 양성 방지)
+            Shizuku.getUid()
+            State.READY
         } catch (_: Throwable) {
-            State.NOT_RUNNING
+            // 여기까지 왔는데 예외면: 권한이 막 회수됐거나 서비스가 사라진 상태
+            if (runCatching { Shizuku.pingBinder() }.getOrDefault(false)) State.NO_PERMISSION
+            else State.NOT_RUNNING
         }
+    }
+
+    /** 상태 화면의 '자세히' 에 보여줄 원시 신호 (문제 진단용). */
+    fun diagnostics(): String {
+        fun s(block: () -> Any?): String = runCatching { block()?.toString() ?: "null" }
+            .getOrElse { "오류(${it.javaClass.simpleName})" }
+        val perm = runCatching {
+            if (Shizuku.checkSelfPermission() == PackageManager.PERMISSION_GRANTED) "허용됨" else "거부됨"
+        }.getOrElse { "오류(${it.javaClass.simpleName})" }
+        return "pingBinder=${s { Shizuku.pingBinder() }}\n" +
+            "preV11=${s { Shizuku.isPreV11() }}\n" +
+            "permission=$perm\n" +
+            "uid=${s { Shizuku.getUid() }}\n" +
+            "version=${s { Shizuku.getVersion() }}"
     }
 
     /** "root" / "adb" 등 Shizuku 가 어떤 권한으로 돌고 있는지 */
@@ -91,5 +111,16 @@ object Shell {
             bundle.getInt(ShellService.KEY_CODE, -1),
             bundle.getString(ShellService.KEY_OUTPUT).orEmpty(),
         )
+    }
+
+    /**
+     * 설치를 누르기 전에 미리 UserService 연결을 맺어둔다.
+     * (첫 설치 때 생기는 1~3초 바인딩 지연을 숨김)
+     */
+    fun prewarm() {
+        if (service != null) return
+        Thread {
+            runCatching { if (state() == State.READY) service() }
+        }.apply { isDaemon = true; start() }
     }
 }

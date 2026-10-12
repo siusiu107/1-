@@ -43,6 +43,8 @@ class InstallActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
+        // 설치를 누르기 전에 Shizuku 연결을 미리 맺어 첫 설치 지연을 숨긴다
+        Shell.prewarm()
         val url = intent?.getStringExtra(EXTRA_URL)
         val uris = extractUris(intent)
         setContent {
