@@ -54,8 +54,8 @@ private val DarkColors = darkColorScheme(
 )
 
 @Composable
-fun SsukTheme(content: @Composable () -> Unit) {
-    val dark = isSystemInDarkTheme()
+fun SsukTheme(forceDark: Boolean? = null, content: @Composable () -> Unit) {
+    val dark = forceDark ?: isSystemInDarkTheme()
     val context = LocalContext.current
     val scheme = when {
         Build.VERSION.SDK_INT >= 31 ->

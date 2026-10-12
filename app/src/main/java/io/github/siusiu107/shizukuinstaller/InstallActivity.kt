@@ -7,6 +7,7 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -28,10 +29,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.graphics.drawable.toBitmap
-import io.github.siusiu107.shizukuinstaller.pkg.ApkInfo
-import io.github.siusiu107.shizukuinstaller.pkg.ApkSources
-import io.github.siusiu107.shizukuinstaller.pkg.NormalInstaller
-import io.github.siusiu107.shizukuinstaller.pkg.ShizukuInstaller
+import io.github.siusiu107.shizukuinstaller.pkg.*
 import io.github.siusiu107.shizukuinstaller.ui.theme.*
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -45,8 +43,14 @@ class InstallActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
+        val url = intent?.getStringExtra(EXTRA_URL)
         val uris = extractUris(intent)
-        setContent { SsukTheme { InstallSheet(uris) { finish() } } }
+        setContent {
+            val prefs = remember { Prefs(this) }
+            SsukTheme(forceDark = themeDark(prefs.theme)) {
+                InstallSheet(uris = uris, downloadUrl = url, prefs = prefs) { finish() }
+            }
+        }
     }
 
     override fun onDestroy() {
@@ -67,10 +71,20 @@ class InstallActivity : ComponentActivity() {
         intent.clipData?.let { clip -> for (i in 0 until clip.itemCount) clip.getItemAt(i).uri?.let { out += it } }
         return out.toList()
     }
+
+    companion object {
+        const val EXTRA_URL = "io.github.siusiu107.shizukuinstaller.extra.URL"
+    }
+}
+
+private fun themeDark(mode: Prefs.ThemeMode): Boolean? = when (mode) {
+    Prefs.ThemeMode.LIGHT -> false
+    Prefs.ThemeMode.DARK -> true
+    Prefs.ThemeMode.SYSTEM -> null
 }
 
 @Composable
-private fun InstallSheet(uris: List<Uri>, onClose: () -> Unit) {
+private fun InstallSheet(uris: List<Uri>, downloadUrl: String?, prefs: Prefs, onClose: () -> Unit) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
 
@@ -78,23 +92,41 @@ private fun InstallSheet(uris: List<Uri>, onClose: () -> Unit) {
     var info by remember { mutableStateOf<ApkInfo?>(null) }
     var apks by remember { mutableStateOf<List<ApkSources.Apk>>(emptyList()) }
     val shizukuReady = remember { Shell.state() == Shell.State.READY }
-    var engine by remember { mutableStateOf(if (shizukuReady) Engine.SHIZUKU else Engine.NORMAL) }
+    var engine by remember {
+        mutableStateOf(
+            when (prefs.defaultEngine) {
+                Prefs.DefaultEngine.NORMAL -> Engine.NORMAL
+                else -> if (shizukuReady) Engine.SHIZUKU else Engine.NORMAL
+            },
+        )
+    }
     var logLine by remember { mutableStateOf("") }
     var errorMsg by remember { mutableStateOf<String?>(null) }
     var recoverable by remember { mutableStateOf(false) }
 
+    // 고급 옵션
+    var optGrant by remember { mutableStateOf(prefs.grantPermissions) }
+    var optDowngrade by remember { mutableStateOf(prefs.allowDowngrade) }
+    var optCompat by remember { mutableStateOf(false) }
+
     LaunchedEffect(Unit) {
-        if (uris.isEmpty()) {
-            errorMsg = "설치할 파일이 없어요."; phase = Phase.FAILURE; return@LaunchedEffect
-        }
         try {
             val parsed = withContext(Dispatchers.IO) {
-                val list = ApkSources.materialize(context, uris) { logLine = it }
+                val list = when {
+                    downloadUrl != null -> {
+                        val f = Downloader.download(context, downloadUrl) { logLine = it }
+                        ApkSources.materializeFiles(context, listOf(f)) { logLine = it }
+                    }
+                    uris.isNotEmpty() -> ApkSources.materialize(context, uris) { logLine = it }
+                    else -> throw ApkSources.SourceException("설치할 파일이 없어요.")
+                }
                 val base = list.firstOrNull { it.isBase } ?: list.maxByOrNull { it.size }!!
                 list to ApkInfo.parse(context, base.file, list.sumOf { it.size }, list.size)
             }
             apks = parsed.first
             info = parsed.second
+            optDowngrade = optDowngrade || parsed.second.isDowngrade
+            optCompat = parsed.second.needsOldSdkCompat
             if (parsed.second.needsOldSdkCompat && shizukuReady) engine = Engine.SHIZUKU
             phase = Phase.READY
         } catch (t: Throwable) {
@@ -107,22 +139,25 @@ private fun InstallSheet(uris: List<Uri>, onClose: () -> Unit) {
         phase = Phase.INSTALLING
         errorMsg = null
         scope.launch {
-            val i = info
             try {
                 if (withEngine == Engine.SHIZUKU) {
                     withContext(Dispatchers.IO) {
                         ShizukuInstaller.install(
                             apks = apks,
-                            grantPermissions = true,
-                            oldSdkCompat = i?.needsOldSdkCompat ?: false,
-                            allowDowngrade = i?.isDowngrade ?: false,
+                            grantPermissions = optGrant,
+                            oldSdkCompat = optCompat,
+                            allowDowngrade = optDowngrade,
                             log = { logLine = it },
                         )
                     }
+                    info?.let { prefs.addHistory(it.packageName, it.label, System.currentTimeMillis()) }
                     phase = Phase.SUCCESS
                 } else {
                     when (val r = NormalInstaller.install(context, apks) { logLine = it }) {
-                        is NormalInstaller.Result.Success -> phase = Phase.SUCCESS
+                        is NormalInstaller.Result.Success -> {
+                            info?.let { prefs.addHistory(it.packageName, it.label, System.currentTimeMillis()) }
+                            phase = Phase.SUCCESS
+                        }
                         is NormalInstaller.Result.Failure -> {
                             errorMsg = r.message; recoverable = r.recoverable; phase = Phase.FAILURE
                         }
@@ -135,9 +170,7 @@ private fun InstallSheet(uris: List<Uri>, onClose: () -> Unit) {
     }
 
     Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(Color.Black.copy(alpha = 0.45f))
+        modifier = Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.45f))
             .noRippleClick { if (phase != Phase.INSTALLING) onClose() },
         contentAlignment = Alignment.BottomCenter,
     ) {
@@ -148,10 +181,8 @@ private fun InstallSheet(uris: List<Uri>, onClose: () -> Unit) {
             tonalElevation = 3.dp,
         ) {
             Column(
-                Modifier
-                    .windowInsetsPadding(WindowInsets.navigationBars)
-                    .padding(horizontal = 22.dp)
-                    .padding(top = 12.dp, bottom = 20.dp),
+                Modifier.windowInsetsPadding(WindowInsets.navigationBars)
+                    .padding(horizontal = 22.dp).padding(top = 12.dp, bottom = 20.dp),
             ) {
                 Box(
                     Modifier.align(Alignment.CenterHorizontally).padding(bottom = 14.dp)
@@ -160,22 +191,19 @@ private fun InstallSheet(uris: List<Uri>, onClose: () -> Unit) {
                 )
                 val currentInfo = info
                 if (phase == Phase.PARSING) {
-                    ParsingBody(logLine)
+                    ParsingBody(logLine, downloadUrl != null)
                 } else if (currentInfo == null) {
                     FatalBody(errorMsg ?: "오류가 났어요.", onClose)
                 } else {
                     Body(
-                        info = currentInfo,
-                        engine = engine,
-                        shizukuReady = shizukuReady,
-                        phase = phase,
-                        logLine = logLine,
-                        errorMsg = errorMsg,
-                        recoverable = recoverable,
-                        onInstall = { runInstall(it) },
-                        onSetEngine = { engine = it },
-                        onClose = onClose,
-                        context = context,
+                        info = currentInfo, engine = engine, shizukuReady = shizukuReady, phase = phase,
+                        logLine = logLine, errorMsg = errorMsg, recoverable = recoverable,
+                        optGrant = optGrant, optDowngrade = optDowngrade, optCompat = optCompat,
+                        onOptGrant = { optGrant = it; prefs.grantPermissions = it },
+                        onOptDowngrade = { optDowngrade = it },
+                        onOptCompat = { optCompat = it },
+                        onInstall = { runInstall(it) }, onSetEngine = { engine = it },
+                        onClose = onClose, context = context,
                     )
                 }
             }
@@ -184,11 +212,11 @@ private fun InstallSheet(uris: List<Uri>, onClose: () -> Unit) {
 }
 
 @Composable
-private fun ParsingBody(logLine: String) {
+private fun ParsingBody(logLine: String, downloading: Boolean) {
     Column(Modifier.fillMaxWidth().padding(vertical = 24.dp), horizontalAlignment = Alignment.CenterHorizontally) {
         CircularProgressIndicator()
         Spacer(Modifier.height(16.dp))
-        Text("파일을 확인하는 중…", color = MaterialTheme.colorScheme.onSurface, fontSize = 15.sp)
+        Text(if (downloading) "파일을 내려받는 중…" else "파일을 확인하는 중…", color = MaterialTheme.colorScheme.onSurface, fontSize = 15.sp)
         if (logLine.isNotBlank()) {
             Spacer(Modifier.height(6.dp))
             Text(logLine, color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 12.sp)
@@ -209,17 +237,11 @@ private fun FatalBody(msg: String, onClose: () -> Unit) {
 
 @Composable
 private fun Body(
-    info: ApkInfo,
-    engine: Engine,
-    shizukuReady: Boolean,
-    phase: Phase,
-    logLine: String,
-    errorMsg: String?,
-    recoverable: Boolean,
-    onInstall: (Engine) -> Unit,
-    onSetEngine: (Engine) -> Unit,
-    onClose: () -> Unit,
-    context: Context,
+    info: ApkInfo, engine: Engine, shizukuReady: Boolean, phase: Phase,
+    logLine: String, errorMsg: String?, recoverable: Boolean,
+    optGrant: Boolean, optDowngrade: Boolean, optCompat: Boolean,
+    onOptGrant: (Boolean) -> Unit, onOptDowngrade: (Boolean) -> Unit, onOptCompat: (Boolean) -> Unit,
+    onInstall: (Engine) -> Unit, onSetEngine: (Engine) -> Unit, onClose: () -> Unit, context: Context,
 ) {
     Row(verticalAlignment = Alignment.CenterVertically) {
         val bmp = remember(info.packageName) { info.icon?.toBitmap(96, 96)?.asImageBitmap() }
@@ -248,8 +270,7 @@ private fun Body(
     Text(info.packageName, fontSize = 11.5.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
 
     val badges = buildList {
-        if (info.isDowngrade) add(Badge("낮은 버전", Warn))
-        else if (info.isUpdate) add(Badge("업데이트", Brand))
+        if (info.isDowngrade) add(Badge("낮은 버전", Warn)) else if (info.isUpdate) add(Badge("업데이트", Brand))
         if (info.needsOldSdkCompat) add(Badge("구버전 앱", Warn))
     }
     if (badges.isNotEmpty()) {
@@ -285,8 +306,7 @@ private fun Body(
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 if (offerShizuku) {
                     Button(onClick = { onInstall(Engine.SHIZUKU) }, modifier = Modifier.weight(1f)) {
-                        Icon(Icons.Rounded.Bolt, null, modifier = Modifier.size(18.dp))
-                        Spacer(Modifier.width(6.dp)); Text("Shizuku 로 설치")
+                        Icon(Icons.Rounded.Bolt, null, modifier = Modifier.size(18.dp)); Spacer(Modifier.width(6.dp)); Text("Shizuku 로 설치")
                     }
                     FilledTonalButton(onClick = onClose) { Text("닫기") }
                 } else {
@@ -301,17 +321,12 @@ private fun Body(
             if (phase != Phase.INSTALLING && shizukuReady) {
                 Spacer(Modifier.height(12.dp))
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    FilterChip(
-                        selected = engine == Engine.NORMAL,
-                        onClick = { onSetEngine(Engine.NORMAL) },
-                        label = { Text("일반 설치") },
-                    )
-                    FilterChip(
-                        selected = engine == Engine.SHIZUKU,
-                        onClick = { onSetEngine(Engine.SHIZUKU) },
-                        label = { Text("Shizuku") },
-                        leadingIcon = { Icon(Icons.Rounded.Bolt, null, modifier = Modifier.size(16.dp)) },
-                    )
+                    FilterChip(engine == Engine.NORMAL, { onSetEngine(Engine.NORMAL) }, { Text("일반 설치") })
+                    FilterChip(engine == Engine.SHIZUKU, { onSetEngine(Engine.SHIZUKU) }, { Text("Shizuku") },
+                        leadingIcon = { Icon(Icons.Rounded.Bolt, null, modifier = Modifier.size(16.dp)) })
+                }
+                if (engine == Engine.SHIZUKU) {
+                    AdvancedOptions(optGrant, optDowngrade, optCompat, onOptGrant, onOptDowngrade, onOptCompat)
                 }
             }
             Spacer(Modifier.height(16.dp))
@@ -333,14 +348,47 @@ private fun Body(
     }
 }
 
+@Composable
+private fun AdvancedOptions(
+    grant: Boolean, downgrade: Boolean, compat: Boolean,
+    onGrant: (Boolean) -> Unit, onDowngrade: (Boolean) -> Unit, onCompat: (Boolean) -> Unit,
+) {
+    var open by remember { mutableStateOf(false) }
+    Spacer(Modifier.height(8.dp))
+    Row(
+        Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).clickable { open = !open }.padding(vertical = 8.dp, horizontal = 4.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Icon(Icons.Rounded.Tune, null, tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(18.dp))
+        Spacer(Modifier.width(8.dp))
+        Text("고급 옵션", fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.weight(1f))
+        Icon(if (open) Icons.Rounded.ExpandLess else Icons.Rounded.ExpandMore, null, tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(18.dp))
+    }
+    AnimatedVisibility(open) {
+        Column {
+            OptionRow("권한 자동 허용", "앱의 런타임 권한을 설치와 함께 허용해요.", grant, onGrant)
+            OptionRow("낮은 버전 허용", "설치된 버전보다 낮아도 설치해요.", downgrade, onDowngrade)
+            OptionRow("구버전 앱 호환 설치", "오래된 앱도 설치되게 해요.", compat, onCompat)
+        }
+    }
+}
+
+@Composable
+private fun OptionRow(title: String, desc: String, checked: Boolean, onChange: (Boolean) -> Unit) {
+    Row(Modifier.fillMaxWidth().padding(vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+        Column(Modifier.weight(1f)) {
+            Text(title, fontSize = 14.sp, color = MaterialTheme.colorScheme.onSurface)
+            Text(desc, fontSize = 11.5.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, lineHeight = 15.sp)
+        }
+        Switch(checked = checked, onCheckedChange = onChange)
+    }
+}
+
 private data class Badge(val text: String, val color: Color)
 
 @Composable
 private fun BadgeChip(b: Badge) {
-    Box(
-        Modifier.clip(RoundedCornerShape(8.dp)).background(b.color.copy(alpha = 0.14f))
-            .padding(horizontal = 10.dp, vertical = 5.dp),
-    ) {
+    Box(Modifier.clip(RoundedCornerShape(8.dp)).background(b.color.copy(alpha = 0.14f)).padding(horizontal = 10.dp, vertical = 5.dp)) {
         Text(b.text, fontSize = 12.sp, fontWeight = FontWeight.Medium, color = b.color)
     }
 }
@@ -380,9 +428,7 @@ private fun ResultRow(icon: ImageVector, tint: Color, text: String) {
 
 @Composable
 private fun Modifier.noRippleClick(onClick: () -> Unit): Modifier = this.clickable(
-    interactionSource = remember { MutableInteractionSource() },
-    indication = null,
-    onClick = onClick,
+    interactionSource = remember { MutableInteractionSource() }, indication = null, onClick = onClick,
 )
 
 private fun human(bytes: Long): String {

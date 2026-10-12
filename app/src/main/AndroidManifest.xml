@@ -4,6 +4,8 @@
 
     <!-- 일반 설치(시스템 설치관리자) 폴백에 필요 -->
     <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
+    <!-- 링크(URL)로 설치 기능 -->
+    <uses-permission android:name="android.permission.INTERNET" />
 
     <!-- 설치 후 "열기" 버튼용 런처 인텐트 조회 + Shizuku 앱 딥링크. QUERY_ALL_PACKAGES 는 쓰지 않음. -->
     <queries>
@@ -35,6 +37,11 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+
+        <activity
+            android:name=".SettingsActivity"
+            android:exported="false"
+            android:parentActivityName=".MainActivity" />
 
         <activity
             android:name=".InstallActivity"
