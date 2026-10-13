@@ -1,0 +1,54 @@
+Ssuk Install is a Korean-first APK installer that shows the app's details as soon as you open an APK file.
+Connect Shizuku or Wireless debugging, and installs finish with a single tap on Ssuk Install's [Install] button, usually in a few seconds.
+
+⚡ Fast Install — Shizuku or Wireless debugging
+Ssuk Install's headline feature. You only need to connect one of the two.
+• One tap: check the app details in Ssuk Install, tap [Install], and you're done. No paging through multiple screens
+• Done in seconds: see how many seconds each install took
+• You start it: even with Fast Install, every install begins only when you tap [Install]
+
+[Normal install] [Install] → one more step in Android's installer screen
+[Fast Install] [Install] once → usually done in a few seconds
+
+▸ Option 1. Wireless debugging (Android 11+, no PC needed)
+• Turn on "Wireless debugging" yourself in your phone's Developer options
+• Pairing happens inside Ssuk Install
+• Type the 6-digit pairing code from the Wireless debugging screen straight into Ssuk Install's notification, and you're connected
+• No switching back and forth between apps to remember the code
+※ Wireless debugging can be turned on only while connected to Wi-Fi, and menu locations vary by device.
+
+▸ Option 2. Shizuku
+• Shizuku is a separate, optional third-party app that you install yourself
+• Start Shizuku, approve Ssuk Install's connection request, and you're ready
+• Already using Shizuku? This is the simplest option
+
+※ Fast Install is optional. Without it, you can always install using Android's standard installer.
+※ Depending on your device manufacturer or Android version, Fast Install may be unavailable or work differently.
+
+■ Install your way
+• Open or share: open or share an APK from a file manager, browser or messenger, then choose Ssuk Install
+• Multiple files: pick several APKs in the app and install them back to back
+• Link: enter a download link (URL) to install directly
+
+■ See it all before you install
+• A bottom sheet first shows the icon, app name, version, size and number of split files
+• Update / Lower version / Old app badges show the status at a glance
+
+■ Split APKs, as they are
+• Supports .apks / .xapk / .apkm
+
+■ Clear help when an install fails
+• Explains why in plain Korean, such as a signature mismatch or not enough storage
+
+■ History and settings
+• Recent installs: tap to open the app
+• Default install method and theme settings
+• Material You design, dark mode
+
+■ No ads, no trackers
+• We added no ads and no tracking tools
+
+■ Good to know
+• Only install APKs from sources you trust.
+• Shizuku is a third-party app made by a separate developer.
+• Ssuk Install is an independent app and is not affiliated with Google or Shizuku.

@@ -352,7 +352,7 @@ private fun Body(
                 ResultRow(Icons.Rounded.CheckCircle, Mint, "설치 완료")
                 if (fastLabel == null) {
                     Spacer(Modifier.height(10.dp))
-                    FastUpsell("다음엔 ⚡ 빠른 설치로 확인 화면 없이 탭 한 번에 설치해 보세요", onEnableFast)
+                    FastUpsell("다음엔 ⚡ 빠른 설치로 탭 한 번에 설치해 보세요", onEnableFast)
                 }
             }
             Spacer(Modifier.height(18.dp))
@@ -396,7 +396,7 @@ private fun Body(
             EngineBanner(engine, shizukuReady, info.needsOldSdkCompat, fastLabel)
             if (!shizukuReady && phase != Phase.INSTALLING) {
                 Spacer(Modifier.height(8.dp))
-                FastUpsell("⚡ 빠른 설치를 켜면 확인 화면 없이 몇 초 만에 설치돼요", onEnableFast)
+                FastUpsell("⚡ 빠른 설치를 켜면 탭 한 번, 보통 몇 초면 끝나요", onEnableFast)
             }
             if (phase != Phase.INSTALLING && shizukuReady) {
                 Spacer(Modifier.height(12.dp))
@@ -496,7 +496,7 @@ private fun EngineBanner(engine: Engine, shizukuReady: Boolean, needsCompat: Boo
     }
     val icon = if (useShizuku) Icons.Rounded.Bolt else if (needsCompat && !shizukuReady) Icons.Rounded.Info else Icons.Rounded.Android
     val text = when {
-        useShizuku -> "⚡ 빠른 설치 · 확인 화면 없이 바로 설치돼요" + (fastLabel?.let { " ($it)" } ?: "")
+        useShizuku -> "⚡ 빠른 설치 · 탭 한 번으로 바로 설치돼요" + (fastLabel?.let { " ($it)" } ?: "")
         needsCompat && !shizukuReady -> "구버전 앱이에요. 빠른 설치(Shizuku·무선 디버깅)를 켜면 설치돼요."
         else -> "일반 설치로 진행해요"
     }

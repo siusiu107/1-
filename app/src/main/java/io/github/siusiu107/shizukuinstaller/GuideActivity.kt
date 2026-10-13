@@ -146,7 +146,7 @@ private fun GuideScreen(
                     }
                     Spacer(Modifier.height(6.dp))
                     Text(
-                        "무선 디버깅이나 Shizuku 중 하나만 연결하면, 확인 화면을 여러 번 거치지 않고 설치 버튼 한 번으로 몇 초 만에 끝나요. 여러 APK도 연달아 설치돼요.",
+                        "무선 디버깅이나 Shizuku 중 하나만 연결하면, 여러 화면을 넘길 필요 없이 설치 버튼 한 번으로 보통 몇 초면 끝나요. 여러 APK도 연달아 설치돼요.",
                         fontSize = 13.sp, color = Color.White.copy(alpha = 0.92f), lineHeight = 19.sp,
                     )
                 }
@@ -200,7 +200,7 @@ private fun GuideScreen(
                 }
 
                 Spacer(Modifier.height(22.dp))
-                GuideSection("기본 설치", "추가 설정 없이 바로 · 설치할 때마다 확인 화면")
+                GuideSection("기본 설치", "추가 설정 없이 바로 · Android 설치 화면 사용")
                 Spacer(Modifier.height(10.dp))
 
                 // 일반 설치
@@ -209,7 +209,7 @@ private fun GuideScreen(
                     title = "일반 설치", subtitle = "시스템 설치 관리자 사용",
                     done = unknownAllowed, doneText = "허용됨",
                 ) {
-                    GuideText("'알 수 없는 앱 설치' 를 한 번 허용하면 돼요. 설치할 때마다 시스템 확인 화면이 떠요.")
+                    GuideText("'알 수 없는 앱 설치' 를 한 번 허용하면 돼요. 설치할 때 Android 설치 화면에서 한 번 더 진행해요.")
                     Spacer(Modifier.height(12.dp))
                     if (!unknownAllowed) {
                         OutlinedButton(onClick = onOpenUnknownSources, modifier = Modifier.fillMaxWidth()) {

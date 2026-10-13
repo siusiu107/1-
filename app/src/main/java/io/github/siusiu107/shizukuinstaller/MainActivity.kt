@@ -276,7 +276,7 @@ private fun FastInstallHero(via: String?, onEnableWireless: () -> Unit, onEnable
                 Text("빠른 설치 켜짐", fontSize = 17.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
                 Spacer(Modifier.height(2.dp))
                 Text(
-                    "$via 로 연결됨 · 설치 버튼 한 번이면 몇 초 만에 끝나요",
+                    "$via 로 연결됨 · 설치 버튼 한 번, 보통 몇 초면 끝나요",
                     fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, lineHeight = 18.sp,
                 )
             }
@@ -295,12 +295,12 @@ private fun FastInstallHero(via: String?, onEnableWireless: () -> Unit, onEnable
         }
         Spacer(Modifier.height(8.dp))
         Text(
-            "Shizuku나 무선 디버깅을 연결하면 확인 화면을 여러 번 거치지 않고, 탭 한 번으로 몇 초 만에 설치돼요.",
+            "Shizuku나 무선 디버깅을 연결하면 여러 화면을 넘길 필요 없이, 설치 버튼 한 번으로 보통 몇 초면 끝나요.",
             fontSize = 13.5.sp, color = Color.White.copy(alpha = 0.92f), lineHeight = 19.sp,
         )
         Spacer(Modifier.height(14.dp))
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            CompareTile("일반 설치", "확인 화면 여러 번", highlight = false, modifier = Modifier.weight(1f))
+            CompareTile("일반 설치", "여러 단계", highlight = false, modifier = Modifier.weight(1f))
             CompareTile("⚡ 빠른 설치", "탭 한 번 · 몇 초", highlight = true, modifier = Modifier.weight(1f))
         }
         Spacer(Modifier.height(16.dp))
@@ -514,7 +514,7 @@ private fun StepsCard() {
             Spacer(Modifier.height(14.dp))
             Step(Icons.Rounded.TouchApp, "설치 버튼 한 번", "앱 정보를 확인하고 설치를 누르면 끝이에요.")
             Spacer(Modifier.height(14.dp))
-            Step(Icons.Rounded.Bolt, "⚡ 빠른 설치로 더 빠르게", "Shizuku나 무선 디버깅을 연결하면 확인 화면 없이 탭 한 번으로 설치돼요.")
+            Step(Icons.Rounded.Bolt, "⚡ 빠른 설치로 더 빠르게", "Shizuku나 무선 디버깅을 연결하면 설치 버튼 한 번으로 바로 끝나요.")
         }
     }
 }

@@ -42,3 +42,8 @@
 
 - 일반 설치: 추가 요구 없음(시스템이 "알 수 없는 출처" 1회 허용을 요청).
 - Shizuku 설치: [Shizuku](https://shizuku.rikka.app/) 실행 + 이 앱에 권한 허용.
+
+## 스토어 등록 자료
+
+- 등록 문구(한국어·영어), 512px 아이콘, 1024×500 피처 그래픽: `fastlane/metadata/android/`
+- 심사 체크리스트와 피해야 할 표현: `docs/PLAY_STORE.md`
