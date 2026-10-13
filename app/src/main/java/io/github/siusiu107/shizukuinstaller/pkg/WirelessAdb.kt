@@ -157,10 +157,18 @@ object WirelessAdb {
         }
     }
 
-    /** exec 스트림 실행: stdin 파일이 있으면 그 바이트를 흘려보내고, 표준출력을 모아 돌려준다. */
+    /**
+     * exec 스트림 실행: stdin 파일이 있으면 그 바이트를 흘려보내고, 표준출력을 모아 돌려준다.
+     *
+     * - 한 번의 write 가 정확히 WRTE 패킷 하나가 되도록 maxData 이하로 잘라 보낸다.
+     *   (libadb 는 큰 write 를 OKAY 를 기다리지 않고 여러 패킷으로 연달아 보내는데,
+     *   adbd 는 그걸 흐름 제어 위반으로 보고 연결을 끊는다 → "Stream closed")
+     * - 원격(pm)이 먼저 끝나거나 에러로 스트림을 닫아도 예외로 끝내지 않고,
+     *   pm 이 실제로 출력한 결과를 끝까지 읽어서 돌려준다.
+     */
     private fun exec(m: AdbManager, destination: String, stdin: File?): String {
         val stream = m.openStream(destination)
-        val sb = StringBuilder()
+        val output = java.io.ByteArrayOutputStream()
         val reader = Thread {
             try {
                 val input = stream.openInputStream()
@@ -168,22 +176,49 @@ object WirelessAdb {
                 while (true) {
                     val n = input.read(buf)
                     if (n < 0) break
-                    sb.append(String(buf, 0, n))
+                    synchronized(output) { output.write(buf, 0, n) }
                 }
             } catch (_: Throwable) {
+                // 스트림 종료 — 지금까지 받은 출력으로 판단
             }
         }.apply { start() }
+
+        var writeError: Throwable? = null
         try {
             if (stdin != null) {
-                val out = stream.openOutputStream()
-                stdin.inputStream().use { it.copyTo(out, 1 shl 20) }
-                out.flush()
+                val chunk = chunkSize(m)
+                val buf = ByteArray(chunk)
+                stdin.inputStream().use { input ->
+                    while (true) {
+                        val n = input.read(buf)
+                        if (n < 0) break
+                        stream.write(buf, 0, n) // 패킷 1개 → 다음 write 는 OKAY 를 받은 뒤에 나간다
+                    }
+                }
+                runCatching { stream.flush() }
             }
-            reader.join(180_000)
-        } finally {
-            runCatching { stream.close() }
+        } catch (t: Throwable) {
+            writeError = t
         }
-        return sb.toString().trim()
+
+        reader.join(180_000)
+        runCatching { stream.close() }
+        val text = synchronized(output) { output.toString(Charsets.UTF_8.name()) }.trim()
+
+        if (writeError != null && text.isBlank()) {
+            val dropped = !connectedNow()
+            throw AdbException(
+                if (dropped) "무선 연결이 끊겼어요. 무선 디버깅이 켜져 있는지 확인하고 다시 시도해 주세요."
+                else "APK 를 보내는 중에 기기가 전송을 끊었어요. 다시 시도해 주세요. (${writeError.message})",
+            )
+        }
+        return text
+    }
+
+    /** 협상된 최대 패킷 크기 이하, 너무 크지 않게 (응답 대기 지연과 메모리 균형) */
+    private fun chunkSize(m: AdbManager): Int {
+        val max = runCatching { (live ?: m.adbConnection)?.maxData }.getOrNull() ?: (64 * 1024)
+        return max.coerceIn(4 * 1024, 256 * 1024)
     }
 
     private fun friendly(out: String): String {
