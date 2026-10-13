@@ -1,0 +1,84 @@
+plugins {
+    id("com.android.application")
+    id("org.jetbrains.kotlin.android")
+    id("org.jetbrains.kotlin.plugin.compose")
+}
+
+android {
+    namespace = "io.github.siusiu107.shizukuinstaller"
+    compileSdk = 36
+
+    defaultConfig {
+        applicationId = "io.github.siusiu107.shizukuinstaller"
+        minSdk = 24
+        targetSdk = 36
+        versionCode = 1
+        versionName = "1.0"
+        vectorDrawables { useSupportLibrary = true }
+    }
+
+    signingConfigs {
+        create("shared") {
+            storeFile = file("shared.keystore")
+            storePassword = "android"
+            keyAlias = "shared"
+            keyPassword = "android"
+        }
+    }
+
+    buildTypes {
+        debug {
+            signingConfig = signingConfigs.getByName("shared")
+        }
+        release {
+            isMinifyEnabled = false
+            signingConfig = signingConfigs.getByName("shared")
+        }
+    }
+
+    buildFeatures {
+        aidl = true
+        buildConfig = true
+        compose = true
+    }
+
+    compileOptions {
+        sourceCompatibility = JavaVersion.VERSION_17
+        targetCompatibility = JavaVersion.VERSION_17
+    }
+}
+
+kotlin {
+    compilerOptions {
+        jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17)
+    }
+}
+
+dependencies {
+    implementation("androidx.core:core-ktx:1.16.0")
+    implementation("androidx.activity:activity-compose:1.10.1")
+    implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.8.7")
+    implementation("androidx.lifecycle:lifecycle-runtime-compose:2.8.7")
+    implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.8.7")
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.9.0")
+
+    val composeBom = platform("androidx.compose:compose-bom:2025.08.01")
+    implementation(composeBom)
+    implementation("androidx.compose.ui:ui")
+    implementation("androidx.compose.ui:ui-graphics")
+    implementation("androidx.compose.ui:ui-tooling-preview")
+    implementation("androidx.compose.material3:material3")
+    implementation("androidx.compose.material:material-icons-extended")
+    debugImplementation("androidx.compose.ui:ui-tooling")
+
+    implementation("dev.rikka.shizuku:api:13.1.5")
+    implementation("dev.rikka.shizuku:provider:13.1.5")
+
+    // 자체 무선 ADB 페어링/설치 (Shizuku·PC 없이)
+    implementation("com.github.MuntashirAkon:libadb-android:3.1.1")
+    implementation("org.bouncycastle:bcprov-jdk15to18:1.81")
+    implementation("org.bouncycastle:bcpkix-jdk15to18:1.81")
+    // 페어링(TLS 1.3 exportKeyingMaterial)에 필요. 없으면 libadb 가 숨김 API(com.android.org.conscrypt)를
+    // 리플렉션하다 막혀서 모든 기기에서 페어링이 실패한다.
+    implementation("org.conscrypt:conscrypt-android:2.5.2")
+}

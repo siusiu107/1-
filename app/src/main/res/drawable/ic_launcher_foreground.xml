@@ -1,0 +1,20 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp" android:height="108dp"
+    android:viewportWidth="108" android:viewportHeight="108">
+    <group android:translateX="6">
+        <!-- speed lines (쓱) -->
+        <path android:fillColor="#FFFFFF" android:fillAlpha="0.55"
+            android:pathData="M26,41 L41,41 A2.5,2.5 0 0 1 41,46 L26,46 A2.5,2.5 0 0 1 26,41 Z" />
+        <path android:fillColor="#FFFFFF" android:fillAlpha="0.85"
+            android:pathData="M22,52 L38,52 A2.5,2.5 0 0 1 38,57 L22,57 A2.5,2.5 0 0 1 22,52 Z" />
+        <!-- arrow shaft -->
+        <path android:fillColor="#FFFFFF"
+            android:pathData="M51,30 L59,30 A1,1 0 0 1 60,31 L60,56 L50,56 L50,31 A1,1 0 0 1 51,30 Z" />
+        <!-- arrow head -->
+        <path android:fillColor="#FFFFFF"
+            android:pathData="M41,54 L69,54 A2,2 0 0 1 70.6,57.2 L56.6,74.2 A2,2 0 0 1 53.4,74.2 L39.4,57.2 A2,2 0 0 1 41,54 Z" />
+        <!-- tray / baseline -->
+        <path android:fillColor="#FFFFFF"
+            android:pathData="M38,80 L70,80 A3,3 0 0 1 73,83 A3,3 0 0 1 70,86 L38,86 A3,3 0 0 1 35,83 A3,3 0 0 1 38,80 Z" />
+    </group>
+</vector>

@@ -1,0 +1,299 @@
+package io.github.siusiu107.shizukuinstaller
+
+import android.content.Intent
+import android.net.Uri
+import android.os.Build
+import android.os.Bundle
+import android.provider.Settings
+import androidx.activity.ComponentActivity
+import androidx.activity.compose.setContent
+import androidx.activity.enableEdgeToEdge
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.*
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import androidx.core.net.toUri
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
+import io.github.siusiu107.shizukuinstaller.pkg.Prefs
+import io.github.siusiu107.shizukuinstaller.pkg.WirelessAdb
+import io.github.siusiu107.shizukuinstaller.ui.theme.*
+import rikka.shizuku.Shizuku
+
+class GuideActivity : ComponentActivity() {
+
+    private val reqCode = 3003
+    private var stateHolder: MutableState<Shell.State>? = null
+    private val permListener = Shizuku.OnRequestPermissionResultListener { code, _ ->
+        if (code == reqCode) stateHolder?.value = Shell.state(this)
+    }
+    private val binderReceived = Shizuku.OnBinderReceivedListener { stateHolder?.value = Shell.state(this) }
+
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        enableEdgeToEdge()
+        Shizuku.addRequestPermissionResultListener(permListener)
+        Shizuku.addBinderReceivedListenerSticky(binderReceived)
+        setContent {
+            val prefs = remember { Prefs(this) }
+            SsukTheme(
+                forceDark = when (prefs.theme) {
+                    Prefs.ThemeMode.LIGHT -> false
+                    Prefs.ThemeMode.DARK -> true
+                    Prefs.ThemeMode.SYSTEM -> null
+                },
+            ) {
+                val state = remember { mutableStateOf(Shell.state(this@GuideActivity)) }
+                stateHolder = state
+                val adb = remember { mutableStateOf(WirelessAdb.connected(this)) }
+                val owner = LocalLifecycleOwner.current
+                DisposableEffect(owner) {
+                    val obs = LifecycleEventObserver { _, e ->
+                        if (e == Lifecycle.Event.ON_RESUME) {
+                            state.value = Shell.state(this@GuideActivity); adb.value = WirelessAdb.connected(this@GuideActivity)
+                        }
+                    }
+                    owner.lifecycle.addObserver(obs)
+                    onDispose { owner.lifecycle.removeObserver(obs) }
+                }
+                GuideScreen(
+                    state = state.value,
+                    adbConnected = adb.value,
+                    unknownAllowed = canInstallUnknown(),
+                    onBack = { finish() },
+                    onOpenUnknownSources = { openUnknownSources() },
+                    onInstallShizuku = { openShizuku() },
+                    onRequestShizuku = {
+                        if (Shizuku.shouldShowRequestPermissionRationale()) openShizuku()
+                        else runCatching { Shizuku.requestPermission(reqCode) }
+                    },
+                    onOpenPairing = { startActivity(Intent(this, PairingActivity::class.java)) },
+                )
+            }
+        }
+    }
+
+    override fun onDestroy() {
+        super.onDestroy()
+        Shizuku.removeRequestPermissionResultListener(permListener)
+        Shizuku.removeBinderReceivedListener(binderReceived)
+    }
+
+    private fun canInstallUnknown(): Boolean =
+        if (Build.VERSION.SDK_INT >= 26) packageManager.canRequestPackageInstalls() else true
+
+    private fun openUnknownSources() {
+        val intent = if (Build.VERSION.SDK_INT >= 26)
+            Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES, "package:$packageName".toUri())
+        else Intent(Settings.ACTION_SECURITY_SETTINGS)
+        runCatching { startActivity(intent) }
+            .onFailure { runCatching { startActivity(Intent(Settings.ACTION_SECURITY_SETTINGS)) } }
+    }
+
+    private fun openShizuku() {
+        val launch = packageManager.getLaunchIntentForPackage("moe.shizuku.privileged.api")
+        if (launch != null) { startActivity(launch); return }
+        val market = Intent(Intent.ACTION_VIEW, "market://details?id=moe.shizuku.privileged.api".toUri())
+        val web = Intent(Intent.ACTION_VIEW, "https://play.google.com/store/apps/details?id=moe.shizuku.privileged.api".toUri())
+        startActivity(if (market.resolveActivity(packageManager) != null) market else web)
+    }
+}
+
+@Composable
+private fun GuideScreen(
+    state: Shell.State,
+    adbConnected: Boolean,
+    unknownAllowed: Boolean,
+    onBack: () -> Unit,
+    onOpenUnknownSources: () -> Unit,
+    onInstallShizuku: () -> Unit,
+    onRequestShizuku: () -> Unit,
+    onOpenPairing: () -> Unit,
+) {
+    Surface(color = MaterialTheme.colorScheme.background) {
+        Column(Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.systemBars)) {
+            Row(Modifier.fillMaxWidth().padding(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                IconButton(onClick = onBack) { Icon(Icons.Rounded.ArrowBack, "뒤로") }
+                Text("빠른 설치 · 설정 가이드", fontSize = 20.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onBackground)
+            }
+            Column(Modifier.verticalScroll(rememberScrollState()).padding(horizontal = 20.dp, vertical = 8.dp)) {
+
+                // ⚡ 빠른 설치 소개
+                Column(
+                    Modifier.fillMaxWidth().clip(RoundedCornerShape(20.dp))
+                        .background(androidx.compose.ui.graphics.Brush.linearGradient(listOf(Brand, BrandAlt)))
+                        .padding(18.dp),
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(Icons.Rounded.Bolt, null, tint = Color.White, modifier = Modifier.size(24.dp))
+                        Spacer(Modifier.width(8.dp))
+                        Text("빠른 설치가 핵심이에요", fontSize = 17.sp, fontWeight = FontWeight.Bold, color = Color.White)
+                    }
+                    Spacer(Modifier.height(6.dp))
+                    Text(
+                        "무선 디버깅이나 Shizuku 중 하나만 연결하면, 여러 화면을 넘길 필요 없이 설치 버튼 한 번으로 보통 몇 초면 끝나요. 여러 APK도 연달아 설치돼요.",
+                        fontSize = 13.sp, color = Color.White.copy(alpha = 0.92f), lineHeight = 19.sp,
+                    )
+                }
+                Spacer(Modifier.height(18.dp))
+
+                GuideSection("⚡ 빠른 설치", "추천 · 둘 중 하나만 있으면 돼요")
+                Spacer(Modifier.height(10.dp))
+
+                // 빠른 설치 A) 무선 디버깅 — PC 없이, 앱 안에서 페어링
+                MethodCard(
+                    icon = Icons.Rounded.Wifi, accent = Mint,
+                    title = "무선 디버깅", subtitle = "PC 불필요 · Android 11+ · 앱 안에서 페어링",
+                    done = adbConnected, doneText = "연결됨",
+                ) {
+                    GuideText("개발자 옵션에서 무선 디버깅을 켜고, 페어링 창을 띄운 채로 알림창에서 6자리 코드를 입력하면 연결돼요.")
+                    Spacer(Modifier.height(12.dp))
+                    Button(onClick = onOpenPairing, modifier = Modifier.fillMaxWidth()) {
+                        Icon(Icons.Rounded.Wifi, null, modifier = Modifier.size(18.dp)); Spacer(Modifier.width(8.dp))
+                        Text(if (adbConnected) "연결 관리" else "무선 디버깅으로 빠른 설치 켜기")
+                    }
+                }
+
+                Spacer(Modifier.height(14.dp))
+
+                // 빠른 설치 B) Shizuku
+                val shizukuDone = state == Shell.State.READY
+                MethodCard(
+                    icon = Icons.Rounded.Bolt, accent = Brand,
+                    title = "Shizuku", subtitle = "별도 앱 · 루트 또는 무선 디버깅으로 실행",
+                    done = shizukuDone, doneText = "준비됨",
+                ) {
+                    val installed = state != Shell.State.NOT_INSTALLED
+                    val running = state == Shell.State.NO_PERMISSION || state == Shell.State.READY || state == Shell.State.TOO_OLD
+                    StepLine(1, "Shizuku 앱 설치", installed)
+                    StepLine(2, "Shizuku 실행 (무선 디버깅 또는 루트)", running)
+                    StepLine(3, "쓱설치에 권한 허용", shizukuDone)
+                    Spacer(Modifier.height(12.dp))
+                    when (state) {
+                        Shell.State.NOT_INSTALLED -> Button(onClick = onInstallShizuku, modifier = Modifier.fillMaxWidth()) {
+                            Icon(Icons.Rounded.Download, null, modifier = Modifier.size(18.dp)); Spacer(Modifier.width(8.dp)); Text("Shizuku 설치 (Play 스토어)")
+                        }
+                        Shell.State.NOT_RUNNING -> Button(onClick = onInstallShizuku, modifier = Modifier.fillMaxWidth()) {
+                            Icon(Icons.Rounded.PlayArrow, null, modifier = Modifier.size(18.dp)); Spacer(Modifier.width(8.dp)); Text("Shizuku 열어서 시작")
+                        }
+                        Shell.State.NO_PERMISSION -> Button(onClick = onRequestShizuku, modifier = Modifier.fillMaxWidth()) {
+                            Icon(Icons.Rounded.Check, null, modifier = Modifier.size(18.dp)); Spacer(Modifier.width(8.dp)); Text("쓱설치에 권한 허용")
+                        }
+                        Shell.State.TOO_OLD -> Button(onClick = onInstallShizuku, modifier = Modifier.fillMaxWidth()) { Text("Shizuku 업데이트") }
+                        Shell.State.READY -> {}
+                    }
+                }
+
+                Spacer(Modifier.height(22.dp))
+                GuideSection("기본 설치", "추가 설정 없이 바로 · Android 설치 화면 사용")
+                Spacer(Modifier.height(10.dp))
+
+                // 일반 설치
+                MethodCard(
+                    icon = Icons.Rounded.Android, accent = MaterialTheme.colorScheme.onSurfaceVariant,
+                    title = "일반 설치", subtitle = "시스템 설치 관리자 사용",
+                    done = unknownAllowed, doneText = "허용됨",
+                ) {
+                    GuideText("'알 수 없는 앱 설치' 를 한 번 허용하면 돼요. 설치할 때 Android 설치 화면에서 한 번 더 진행해요.")
+                    Spacer(Modifier.height(12.dp))
+                    if (!unknownAllowed) {
+                        OutlinedButton(onClick = onOpenUnknownSources, modifier = Modifier.fillMaxWidth()) {
+                            Icon(Icons.Rounded.Lock, null, modifier = Modifier.size(18.dp)); Spacer(Modifier.width(8.dp)); Text("알 수 없는 앱 설치 허용 열기")
+                        }
+                    }
+                }
+
+                Spacer(Modifier.height(16.dp))
+                Row(
+                    Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(MaterialTheme.colorScheme.surfaceVariant).padding(14.dp),
+                ) {
+                    Icon(Icons.Rounded.Lightbulb, null, tint = Warn, modifier = Modifier.size(18.dp))
+                    Spacer(Modifier.width(10.dp))
+                    Text(
+                        "팁: 빠른 설치를 한 번 연결해 두면, 다음부터는 APK 를 열고 설치만 누르면 바로 끝나요. 믿을 수 있는 출처의 APK 만 설치하세요.",
+                        fontSize = 12.5.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, lineHeight = 18.sp,
+                    )
+                }
+                Spacer(Modifier.height(24.dp))
+            }
+        }
+    }
+}
+
+@Composable
+private fun MethodCard(
+    icon: ImageVector, accent: Color, title: String, subtitle: String,
+    done: Boolean, doneText: String, content: @Composable ColumnScope.() -> Unit,
+) {
+    Card(
+        modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(22.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
+    ) {
+        Column(Modifier.padding(18.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Box(
+                    Modifier.size(40.dp).clip(RoundedCornerShape(12.dp)).background(accent.copy(alpha = 0.14f)),
+                    contentAlignment = Alignment.Center,
+                ) { Icon(icon, null, tint = accent, modifier = Modifier.size(22.dp)) }
+                Spacer(Modifier.width(14.dp))
+                Column(Modifier.weight(1f)) {
+                    Text(title, fontSize = 16.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
+                    Text(subtitle, fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+                if (done) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(Icons.Rounded.CheckCircle, null, tint = Mint, modifier = Modifier.size(18.dp))
+                        Spacer(Modifier.width(4.dp)); Text(doneText, fontSize = 12.sp, color = Mint, fontWeight = FontWeight.Medium)
+                    }
+                }
+            }
+            Spacer(Modifier.height(14.dp))
+            content()
+        }
+    }
+}
+
+@Composable
+private fun GuideText(text: String) {
+    Text(text, fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, lineHeight = 19.sp)
+}
+
+@Composable
+private fun StepLine(num: Int, text: String, done: Boolean) {
+    Row(Modifier.padding(vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+        Box(
+            Modifier.size(22.dp).clip(CircleShape)
+                .background(if (done) Mint else MaterialTheme.colorScheme.surfaceVariant),
+            contentAlignment = Alignment.Center,
+        ) {
+            if (done) Icon(Icons.Rounded.Check, null, tint = Color.White, modifier = Modifier.size(14.dp))
+            else Text("$num", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+        Spacer(Modifier.width(10.dp))
+        Text(text, fontSize = 13.5.sp, color = MaterialTheme.colorScheme.onSurface)
+    }
+}
+
+@Composable
+private fun GuideSection(title: String, subtitle: String) {
+    Column(Modifier.padding(horizontal = 4.dp)) {
+        Text(title, fontSize = 16.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onBackground)
+        Text(subtitle, fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+    }
+}
