@@ -97,6 +97,7 @@ private fun InstallSheet(uris: List<Uri>, downloadUrl: String?, prefs: Prefs, on
     // Shizuku 바인더는 콜드스타트 시 늦게 도착할 수 있고, 무선 연결도 백그라운드로 복구되므로 실시간 상태로 둔다
     var shizukuReady by remember { mutableStateOf(PrivilegedInstaller.available(context)) }
     var engineTouched by remember { mutableStateOf(false) }
+    var fastElapsedMs by remember { mutableStateOf<Long?>(null) }
     var engine by remember {
         mutableStateOf(
             when (prefs.defaultEngine) {
@@ -153,6 +154,16 @@ private fun InstallSheet(uris: List<Uri>, downloadUrl: String?, prefs: Prefs, on
         }
     }
 
+    // 가이드/페어링에서 빠른 설치를 켜고 돌아오면 바로 반영
+    val owner = androidx.lifecycle.compose.LocalLifecycleOwner.current
+    DisposableEffect(owner) {
+        val obs = androidx.lifecycle.LifecycleEventObserver { _, e ->
+            if (e == androidx.lifecycle.Lifecycle.Event.ON_RESUME) shizukuReady = PrivilegedInstaller.available(context)
+        }
+        owner.lifecycle.addObserver(obs)
+        onDispose { owner.lifecycle.removeObserver(obs) }
+    }
+
     // 앱이 꺼져 있다가 파일로 바로 열린 경우: 페어링해 둔 무선 연결을 조용히 복구
     LaunchedEffect(Unit) {
         if (!shizukuReady && WirelessAdb.reconnectInBackground(context)) {
@@ -173,9 +184,11 @@ private fun InstallSheet(uris: List<Uri>, downloadUrl: String?, prefs: Prefs, on
         engine = withEngine
         phase = Phase.INSTALLING
         errorMsg = null
+        fastElapsedMs = null
         scope.launch {
             try {
                 if (withEngine == Engine.SHIZUKU) {
+                    val started = android.os.SystemClock.elapsedRealtime()
                     withContext(Dispatchers.IO) {
                         PrivilegedInstaller.install(
                             context = context,
@@ -186,6 +199,7 @@ private fun InstallSheet(uris: List<Uri>, downloadUrl: String?, prefs: Prefs, on
                             log = { logLine = it },
                         )
                     }
+                    fastElapsedMs = android.os.SystemClock.elapsedRealtime() - started
                     info?.let { prefs.addHistory(it.packageName, it.label, System.currentTimeMillis()) }
                     phase = Phase.SUCCESS
                 } else {
@@ -240,6 +254,13 @@ private fun InstallSheet(uris: List<Uri>, downloadUrl: String?, prefs: Prefs, on
                         onOptCompat = { optCompat = it },
                         onInstall = { runInstall(it) }, onSetEngine = { engine = it; engineTouched = true },
                         onClose = onClose, context = context,
+                        fastElapsedMs = fastElapsedMs,
+                        fastLabel = if (shizukuReady) PrivilegedInstaller.label(context) else null,
+                        onEnableFast = {
+                            context.startActivity(
+                                Intent(context, GuideActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
+                            )
+                        },
                     )
                 }
             }
@@ -278,6 +299,7 @@ private fun Body(
     optGrant: Boolean, optDowngrade: Boolean, optCompat: Boolean,
     onOptGrant: (Boolean) -> Unit, onOptDowngrade: (Boolean) -> Unit, onOptCompat: (Boolean) -> Unit,
     onInstall: (Engine) -> Unit, onSetEngine: (Engine) -> Unit, onClose: () -> Unit, context: Context,
+    fastElapsedMs: Long?, fastLabel: String?, onEnableFast: () -> Unit,
 ) {
     Row(verticalAlignment = Alignment.CenterVertically) {
         val bmp = remember(info.packageName) { info.icon?.toBitmap(96, 96)?.asImageBitmap() }
@@ -318,7 +340,21 @@ private fun Body(
 
     when (phase) {
         Phase.SUCCESS -> {
-            ResultRow(Icons.Rounded.CheckCircle, Mint, "설치 완료")
+            if (fastElapsedMs != null) {
+                val sec = (fastElapsedMs / 100L) / 10.0
+                ResultRow(Icons.Rounded.Bolt, Mint, "${"%.1f".format(sec)}초 만에 설치 완료")
+                Spacer(Modifier.height(4.dp))
+                Text(
+                    "⚡ 빠른 설치${fastLabel?.let { " · $it" } ?: ""}",
+                    fontSize = 12.5.sp, color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            } else {
+                ResultRow(Icons.Rounded.CheckCircle, Mint, "설치 완료")
+                if (fastLabel == null) {
+                    Spacer(Modifier.height(10.dp))
+                    FastUpsell("다음엔 ⚡ 빠른 설치로 확인 화면 없이 탭 한 번에 설치해 보세요", onEnableFast)
+                }
+            }
             Spacer(Modifier.height(18.dp))
             val launch = remember(info.packageName) {
                 runCatching { context.packageManager.getLaunchIntentForPackage(info.packageName) }.getOrNull()
@@ -357,7 +393,11 @@ private fun Body(
         }
 
         else -> {
-            EngineBanner(engine, shizukuReady, info.needsOldSdkCompat)
+            EngineBanner(engine, shizukuReady, info.needsOldSdkCompat, fastLabel)
+            if (!shizukuReady && phase != Phase.INSTALLING) {
+                Spacer(Modifier.height(8.dp))
+                FastUpsell("⚡ 빠른 설치를 켜면 확인 화면 없이 몇 초 만에 설치돼요", onEnableFast)
+            }
             if (phase != Phase.INSTALLING && shizukuReady) {
                 Spacer(Modifier.height(12.dp))
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -434,7 +474,20 @@ private fun BadgeChip(b: Badge) {
 }
 
 @Composable
-private fun EngineBanner(engine: Engine, shizukuReady: Boolean, needsCompat: Boolean) {
+private fun FastUpsell(text: String, onClick: () -> Unit) {
+    Row(
+        Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).clickable(onClick = onClick)
+            .background(Brand.copy(alpha = 0.08f)).padding(horizontal = 14.dp, vertical = 10.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(text, fontSize = 12.5.sp, color = MaterialTheme.colorScheme.onSurface, modifier = Modifier.weight(1f), lineHeight = 17.sp)
+        Spacer(Modifier.width(8.dp))
+        Text("켜기 ›", fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = Brand)
+    }
+}
+
+@Composable
+private fun EngineBanner(engine: Engine, shizukuReady: Boolean, needsCompat: Boolean, fastLabel: String?) {
     val useShizuku = engine == Engine.SHIZUKU
     val tint = when {
         useShizuku -> Brand
@@ -443,8 +496,8 @@ private fun EngineBanner(engine: Engine, shizukuReady: Boolean, needsCompat: Boo
     }
     val icon = if (useShizuku) Icons.Rounded.Bolt else if (needsCompat && !shizukuReady) Icons.Rounded.Info else Icons.Rounded.Android
     val text = when {
-        useShizuku -> "빠른 설치로 진행해요 (막힌 앱도 OK)"
-        needsCompat && !shizukuReady -> "구버전 앱이에요. Shizuku 또는 무선 연결을 켜면 설치돼요."
+        useShizuku -> "⚡ 빠른 설치 · 확인 화면 없이 바로 설치돼요" + (fastLabel?.let { " ($it)" } ?: "")
+        needsCompat && !shizukuReady -> "구버전 앱이에요. 빠른 설치(Shizuku·무선 디버깅)를 켜면 설치돼요."
         else -> "일반 설치로 진행해요"
     }
     Row(

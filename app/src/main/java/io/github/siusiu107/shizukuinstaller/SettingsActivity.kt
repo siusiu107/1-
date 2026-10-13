@@ -63,13 +63,13 @@ private fun SettingsScreen(
             Column(Modifier.verticalScroll(rememberScrollState()).padding(horizontal = 20.dp, vertical = 8.dp)) {
                 SectionTitle("기본 설치 방식")
                 SettingsCard {
-                    RadioRow("자동 (Shizuku 켜져 있으면 Shizuku)", engine == Prefs.DefaultEngine.AUTO) { engine = Prefs.DefaultEngine.AUTO; prefs.defaultEngine = engine }
+                    RadioRow("자동 (빠른 설치가 연결돼 있으면 빠른 설치)", engine == Prefs.DefaultEngine.AUTO) { engine = Prefs.DefaultEngine.AUTO; prefs.defaultEngine = engine }
                     RadioRow("항상 일반 설치 먼저", engine == Prefs.DefaultEngine.NORMAL) { engine = Prefs.DefaultEngine.NORMAL; prefs.defaultEngine = engine }
-                    RadioRow("가능하면 Shizuku 우선", engine == Prefs.DefaultEngine.SHIZUKU) { engine = Prefs.DefaultEngine.SHIZUKU; prefs.defaultEngine = engine }
+                    RadioRow("빠른 설치 우선 (Shizuku · 무선 디버깅)", engine == Prefs.DefaultEngine.SHIZUKU) { engine = Prefs.DefaultEngine.SHIZUKU; prefs.defaultEngine = engine }
                 }
 
                 Spacer(Modifier.height(16.dp))
-                SectionTitle("Shizuku 설치 기본 옵션")
+                SectionTitle("빠른 설치 기본 옵션")
                 SettingsCard {
                     SwitchRow("권한 자동 허용", "앱 런타임 권한을 설치와 함께 허용", grant) { grant = it; prefs.grantPermissions = it }
                     SwitchRow("낮은 버전 허용", "설치된 버전보다 낮아도 설치", downgrade) { downgrade = it; prefs.allowDowngrade = it }

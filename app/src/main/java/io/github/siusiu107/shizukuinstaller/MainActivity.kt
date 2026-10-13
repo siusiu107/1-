@@ -27,6 +27,8 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.compose.ui.text.font.FontWeight
@@ -205,7 +207,15 @@ private fun HomeScreen(
                 Text("탭 한 번, 쓱 설치", fontSize = 14.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
 
-            Spacer(Modifier.height(24.dp))
+            Spacer(Modifier.height(20.dp))
+            val fastVia = when {
+                state == Shell.State.READY -> "Shizuku"
+                adbConnected -> "무선 디버깅"
+                else -> null
+            }
+            FastInstallHero(via = fastVia, onEnableWireless = onOpenPairing, onEnableShizuku = onOpenGuide)
+
+            Spacer(Modifier.height(16.dp))
 
             // primary actions
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -219,11 +229,14 @@ private fun HomeScreen(
                 }
             }
 
-            Spacer(Modifier.height(16.dp))
-            StatusCard(state, onPrimary, onOpenShizuku)
-
-            Spacer(Modifier.height(12.dp))
+            Spacer(Modifier.height(24.dp))
+            SectionHeader("⚡ 빠른 설치 연결", "둘 중 하나만 연결하면 돼요")
+            Spacer(Modifier.height(10.dp))
+            MethodLabel("방법 1 · 무선 디버깅", "추천 · PC 불필요 · Android 11+")
             WirelessCard(adbConnected, onOpenPairing)
+            Spacer(Modifier.height(14.dp))
+            MethodLabel("방법 2 · Shizuku", "별도 앱 · 루트/무선 디버깅으로 실행")
+            StatusCard(state, onPrimary, onOpenShizuku)
 
             if (history.isNotEmpty()) {
                 Spacer(Modifier.height(16.dp))
@@ -243,6 +256,99 @@ private fun HomeScreen(
             showUrlDialog = false
             onInstallUrl(it)
         })
+    }
+}
+
+@Composable
+private fun FastInstallHero(via: String?, onEnableWireless: () -> Unit, onEnableShizuku: () -> Unit) {
+    if (via != null) {
+        Row(
+            Modifier.fillMaxWidth().clip(RoundedCornerShape(24.dp))
+                .background(Mint.copy(alpha = 0.16f)).padding(18.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Box(
+                Modifier.size(44.dp).clip(RoundedCornerShape(14.dp)).background(Mint),
+                contentAlignment = Alignment.Center,
+            ) { Icon(Icons.Rounded.Bolt, null, tint = Color.White, modifier = Modifier.size(26.dp)) }
+            Spacer(Modifier.width(14.dp))
+            Column(Modifier.weight(1f)) {
+                Text("빠른 설치 켜짐", fontSize = 17.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
+                Spacer(Modifier.height(2.dp))
+                Text(
+                    "$via 로 연결됨 · 설치 버튼 한 번이면 몇 초 만에 끝나요",
+                    fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, lineHeight = 18.sp,
+                )
+            }
+        }
+        return
+    }
+
+    Column(
+        Modifier.fillMaxWidth().clip(RoundedCornerShape(24.dp))
+            .background(Brush.linearGradient(listOf(Brand, BrandAlt))).padding(20.dp),
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Icon(Icons.Rounded.Bolt, null, tint = Color.White, modifier = Modifier.size(26.dp))
+            Spacer(Modifier.width(8.dp))
+            Text("빠른 설치를 켜 보세요", fontSize = 19.sp, fontWeight = FontWeight.Bold, color = Color.White)
+        }
+        Spacer(Modifier.height(8.dp))
+        Text(
+            "Shizuku나 무선 디버깅을 연결하면 확인 화면을 여러 번 거치지 않고, 탭 한 번으로 몇 초 만에 설치돼요.",
+            fontSize = 13.5.sp, color = Color.White.copy(alpha = 0.92f), lineHeight = 19.sp,
+        )
+        Spacer(Modifier.height(14.dp))
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            CompareTile("일반 설치", "확인 화면 여러 번", highlight = false, modifier = Modifier.weight(1f))
+            CompareTile("⚡ 빠른 설치", "탭 한 번 · 몇 초", highlight = true, modifier = Modifier.weight(1f))
+        }
+        Spacer(Modifier.height(16.dp))
+        Button(
+            onClick = onEnableWireless,
+            colors = ButtonDefaults.buttonColors(containerColor = Color.White, contentColor = Brand),
+            modifier = Modifier.fillMaxWidth().height(48.dp),
+        ) {
+            Icon(Icons.Rounded.Wifi, null, modifier = Modifier.size(18.dp)); Spacer(Modifier.width(8.dp))
+            Text("무선 디버깅으로 켜기 (PC 불필요)", fontWeight = FontWeight.SemiBold)
+        }
+        Spacer(Modifier.height(8.dp))
+        OutlinedButton(
+            onClick = onEnableShizuku,
+            colors = ButtonDefaults.outlinedButtonColors(contentColor = Color.White),
+            border = androidx.compose.foundation.BorderStroke(1.dp, Color.White.copy(alpha = 0.7f)),
+            modifier = Modifier.fillMaxWidth().height(44.dp),
+        ) { Text("Shizuku로 켜기") }
+    }
+}
+
+@Composable
+private fun CompareTile(title: String, desc: String, highlight: Boolean, modifier: Modifier = Modifier) {
+    Column(
+        modifier.clip(RoundedCornerShape(14.dp))
+            .background(Color.White.copy(alpha = if (highlight) 0.24f else 0.10f))
+            .padding(horizontal = 12.dp, vertical = 10.dp),
+    ) {
+        Text(title, fontSize = 13.sp, fontWeight = FontWeight.Bold, color = Color.White)
+        Spacer(Modifier.height(2.dp))
+        Text(desc, fontSize = 12.sp, color = Color.White.copy(alpha = if (highlight) 1f else 0.75f))
+    }
+}
+
+@Composable
+private fun SectionHeader(title: String, subtitle: String) {
+    Column(Modifier.padding(horizontal = 4.dp)) {
+        Text(title, fontSize = 17.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onBackground)
+        Text(subtitle, fontSize = 12.5.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+    }
+}
+
+@Composable
+private fun MethodLabel(title: String, tag: String) {
+    Row(Modifier.padding(start = 4.dp, bottom = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+        Text(title, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.primary)
+        Spacer(Modifier.width(8.dp))
+        Text(tag, fontSize = 11.5.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
     }
 }
 
@@ -272,7 +378,7 @@ private fun UrlDialog(onDismiss: () -> Unit, onConfirm: (String) -> Unit) {
 @Composable
 private fun StatusCard(state: Shell.State, onPrimary: () -> Unit, onOpenShizuku: () -> Unit) {
     val (dot, title, desc) = when (state) {
-        Shell.State.READY -> Triple(Mint, "Shizuku 준비됨", "막힌 앱도 쓱 설치할 수 있어요 (${Shell.backendName()} 권한).")
+        Shell.State.READY -> Triple(Mint, "Shizuku 준비됨", "⚡ 빠른 설치 사용 가능 (${Shell.backendName()} 권한)")
         Shell.State.NO_PERMISSION -> Triple(Warn, "권한이 필요해요", "쓱설치에 Shizuku 권한을 한 번 허용해 주세요.")
         Shell.State.NOT_INSTALLED -> Triple(MaterialTheme.colorScheme.onSurfaceVariant, "Shizuku 미설치", "일반 설치는 바로 돼요. 막힌 앱은 Shizuku 를 설치하거나, 아래 '무선 디버깅으로 연결' 을 쓰면 돼요.")
         Shell.State.NOT_RUNNING -> Triple(MaterialTheme.colorScheme.onSurfaceVariant, "Shizuku 꺼짐", "Shizuku 가 설치돼 있지만 실행 중이 아니에요. Shizuku 를 열어 시작해 주세요.")
@@ -408,7 +514,7 @@ private fun StepsCard() {
             Spacer(Modifier.height(14.dp))
             Step(Icons.Rounded.TouchApp, "설치 버튼 한 번", "앱 정보를 확인하고 설치를 누르면 끝이에요.")
             Spacer(Modifier.height(14.dp))
-            Step(Icons.Rounded.Bolt, "막히면 Shizuku 로", "일반 설치가 막히면 Shizuku 로 바로 다시 설치해요.")
+            Step(Icons.Rounded.Bolt, "⚡ 빠른 설치로 더 빠르게", "Shizuku나 무선 디버깅을 연결하면 확인 화면 없이 탭 한 번으로 설치돼요.")
         }
     }
 }

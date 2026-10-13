@@ -129,38 +129,53 @@ private fun GuideScreen(
         Column(Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.systemBars)) {
             Row(Modifier.fillMaxWidth().padding(8.dp), verticalAlignment = Alignment.CenterVertically) {
                 IconButton(onClick = onBack) { Icon(Icons.Rounded.ArrowBack, "뒤로") }
-                Text("권한 · 설정 가이드", fontSize = 20.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onBackground)
+                Text("빠른 설치 · 설정 가이드", fontSize = 20.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onBackground)
             }
             Column(Modifier.verticalScroll(rememberScrollState()).padding(horizontal = 20.dp, vertical = 8.dp)) {
 
-                Text(
-                    "APK 를 설치하는 방법은 3가지예요. 하나만 설정해두면 돼요.",
-                    fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, lineHeight = 19.sp,
-                )
-                Spacer(Modifier.height(16.dp))
-
-                // 1) 일반 설치
-                MethodCard(
-                    icon = Icons.Rounded.Android, accent = MaterialTheme.colorScheme.primary,
-                    title = "① 일반 설치", subtitle = "가장 간단 · 추가 앱 불필요",
-                    done = unknownAllowed, doneText = "허용됨",
+                // ⚡ 빠른 설치 소개
+                Column(
+                    Modifier.fillMaxWidth().clip(RoundedCornerShape(20.dp))
+                        .background(androidx.compose.ui.graphics.Brush.linearGradient(listOf(Brand, BrandAlt)))
+                        .padding(18.dp),
                 ) {
-                    GuideText("이 앱이 APK 를 설치할 수 있도록 '알 수 없는 앱 설치' 를 한 번 허용하면 돼요. 설치할 때 시스템 확인 창이 떠요.")
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(Icons.Rounded.Bolt, null, tint = Color.White, modifier = Modifier.size(24.dp))
+                        Spacer(Modifier.width(8.dp))
+                        Text("빠른 설치가 핵심이에요", fontSize = 17.sp, fontWeight = FontWeight.Bold, color = Color.White)
+                    }
+                    Spacer(Modifier.height(6.dp))
+                    Text(
+                        "무선 디버깅이나 Shizuku 중 하나만 연결하면, 확인 화면을 여러 번 거치지 않고 설치 버튼 한 번으로 몇 초 만에 끝나요. 여러 APK도 연달아 설치돼요.",
+                        fontSize = 13.sp, color = Color.White.copy(alpha = 0.92f), lineHeight = 19.sp,
+                    )
+                }
+                Spacer(Modifier.height(18.dp))
+
+                GuideSection("⚡ 빠른 설치", "추천 · 둘 중 하나만 있으면 돼요")
+                Spacer(Modifier.height(10.dp))
+
+                // 빠른 설치 A) 무선 디버깅 — PC 없이, 앱 안에서 페어링
+                MethodCard(
+                    icon = Icons.Rounded.Wifi, accent = Mint,
+                    title = "무선 디버깅", subtitle = "PC 불필요 · Android 11+ · 앱 안에서 페어링",
+                    done = adbConnected, doneText = "연결됨",
+                ) {
+                    GuideText("개발자 옵션에서 무선 디버깅을 켜고, 페어링 창을 띄운 채로 알림창에서 6자리 코드를 입력하면 연결돼요.")
                     Spacer(Modifier.height(12.dp))
-                    if (!unknownAllowed) {
-                        Button(onClick = onOpenUnknownSources, modifier = Modifier.fillMaxWidth()) {
-                            Icon(Icons.Rounded.Lock, null, modifier = Modifier.size(18.dp)); Spacer(Modifier.width(8.dp)); Text("알 수 없는 앱 설치 허용 열기")
-                        }
+                    Button(onClick = onOpenPairing, modifier = Modifier.fillMaxWidth()) {
+                        Icon(Icons.Rounded.Wifi, null, modifier = Modifier.size(18.dp)); Spacer(Modifier.width(8.dp))
+                        Text(if (adbConnected) "연결 관리" else "무선 디버깅으로 빠른 설치 켜기")
                     }
                 }
 
                 Spacer(Modifier.height(14.dp))
 
-                // 2) Shizuku
+                // 빠른 설치 B) Shizuku
                 val shizukuDone = state == Shell.State.READY
                 MethodCard(
                     icon = Icons.Rounded.Bolt, accent = Brand,
-                    title = "② Shizuku", subtitle = "빠르고 강력 · 막힌 앱도 설치",
+                    title = "Shizuku", subtitle = "별도 앱 · 루트 또는 무선 디버깅으로 실행",
                     done = shizukuDone, doneText = "준비됨",
                 ) {
                     val installed = state != Shell.State.NOT_INSTALLED
@@ -184,19 +199,22 @@ private fun GuideScreen(
                     }
                 }
 
-                Spacer(Modifier.height(14.dp))
+                Spacer(Modifier.height(22.dp))
+                GuideSection("기본 설치", "추가 설정 없이 바로 · 설치할 때마다 확인 화면")
+                Spacer(Modifier.height(10.dp))
 
-                // 3) 무선 ADB
+                // 일반 설치
                 MethodCard(
-                    icon = Icons.Rounded.Wifi, accent = Mint,
-                    title = "③ 무선 디버깅 연결", subtitle = "Shizuku·PC 없이 · Android 11+",
-                    done = adbConnected, doneText = "연결됨",
+                    icon = Icons.Rounded.Android, accent = MaterialTheme.colorScheme.onSurfaceVariant,
+                    title = "일반 설치", subtitle = "시스템 설치 관리자 사용",
+                    done = unknownAllowed, doneText = "허용됨",
                 ) {
-                    GuideText("앱이 직접 무선 디버깅으로 페어링해서 설치해요. 개발자 옵션에서 무선 디버깅을 켜고 페어링 코드를 입력하면 돼요.")
+                    GuideText("'알 수 없는 앱 설치' 를 한 번 허용하면 돼요. 설치할 때마다 시스템 확인 화면이 떠요.")
                     Spacer(Modifier.height(12.dp))
-                    Button(onClick = onOpenPairing, modifier = Modifier.fillMaxWidth()) {
-                        Icon(Icons.Rounded.Wifi, null, modifier = Modifier.size(18.dp)); Spacer(Modifier.width(8.dp))
-                        Text(if (adbConnected) "연결 관리" else "무선 페어링 시작")
+                    if (!unknownAllowed) {
+                        OutlinedButton(onClick = onOpenUnknownSources, modifier = Modifier.fillMaxWidth()) {
+                            Icon(Icons.Rounded.Lock, null, modifier = Modifier.size(18.dp)); Spacer(Modifier.width(8.dp)); Text("알 수 없는 앱 설치 허용 열기")
+                        }
                     }
                 }
 
@@ -207,7 +225,7 @@ private fun GuideScreen(
                     Icon(Icons.Rounded.Lightbulb, null, tint = Warn, modifier = Modifier.size(18.dp))
                     Spacer(Modifier.width(10.dp))
                     Text(
-                        "팁: 앱을 처음 받았을 때 설치가 막히면, ② 또는 ③ 을 설정해두면 다음부터 막힘 없이 바로 설치돼요.",
+                        "팁: 빠른 설치를 한 번 연결해 두면, 다음부터는 APK 를 열고 설치만 누르면 바로 끝나요. 믿을 수 있는 출처의 APK 만 설치하세요.",
                         fontSize = 12.5.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, lineHeight = 18.sp,
                     )
                 }
@@ -269,5 +287,13 @@ private fun StepLine(num: Int, text: String, done: Boolean) {
         }
         Spacer(Modifier.width(10.dp))
         Text(text, fontSize = 13.5.sp, color = MaterialTheme.colorScheme.onSurface)
+    }
+}
+
+@Composable
+private fun GuideSection(title: String, subtitle: String) {
+    Column(Modifier.padding(horizontal = 4.dp)) {
+        Text(title, fontSize = 16.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onBackground)
+        Text(subtitle, fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
     }
 }
