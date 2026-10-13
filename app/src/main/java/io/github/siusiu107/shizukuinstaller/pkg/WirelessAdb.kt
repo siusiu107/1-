@@ -134,11 +134,18 @@ object WirelessAdb {
         if (apks.size == 1) {
             log.log("설치 중…")
             val apk = apks[0]
-            val out = exec(m, "exec:pm install $flags -S ${apk.size} -", apk.file)
-            if (!out.contains("Success")) throw AdbException(friendly(out))
-            return
+            // 경로 인자를 빼야 표준입력에서 읽는다. 끝에 '-' 를 붙이면 일부 기기의 pm 이 옵션으로 오인해
+            // "Unknown option -" 으로 거부한다.
+            val out = exec(m, "exec:pm install $flags -S ${apk.size}", apk.file)
+            if (out.contains("Success")) return
+            // 그래도 옵션 해석이 다른 기기면 세션 방식으로 한 번 더
+            if (!isOptionError(out)) throw AdbException(friendly(out))
+            log.log("다른 방식으로 다시 설치하는 중…")
         }
+        installSession(m, apks, flags, log)
+    }
 
+    private fun installSession(m: AdbManager, apks: List<ApkSources.Apk>, flags: String, log: ApkSources.Logger) {
         val create = exec(m, "exec:pm install-create $flags", null)
         val sid = Regex("""\[(\d+)]""").find(create)?.groupValues?.get(1)
             ?: throw AdbException("설치 세션을 만들지 못했어요.\n$create")
@@ -221,8 +228,12 @@ object WirelessAdb {
         return max.coerceIn(4 * 1024, 256 * 1024)
     }
 
-    private fun friendly(out: String): String {
-        val o = out.uppercase()
+    private fun isOptionError(out: String): Boolean =
+        out.contains("Unknown option") || out.contains("IllegalArgumentException")
+
+    private fun friendly(raw: String): String {
+        val out = InstallErrors.summarize(raw)
+        val o = raw.uppercase()
         return when {
             "SIGNATURE" in o || "UPDATE_INCOMPATIBLE" in o ->
                 "서명이 기존 앱과 달라요. 먼저 기존 앱을 삭제해야 설치돼요 (데이터가 지워져요)."

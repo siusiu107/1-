@@ -41,12 +41,21 @@ object ShizukuInstaller {
         log.log("설치 중…")
         val pipe = ParcelFileDescriptor.createPipe()
         val writer = streamFile(apk, pipe[1])
+        // 경로 인자를 빼야 표준입력에서 읽는다. 끝에 '-' 를 붙이면 일부 기기의 pm 이
+        // 옵션으로 오인해 "Unknown option -" 으로 거부한다.
         val args = buildList {
-            add("pm"); add("install"); addAll(flags); add("-S"); add(apk.size.toString()); add("-")
+            add("pm"); add("install"); addAll(flags); add("-S"); add(apk.size.toString())
         }
         val res = Shell.run(*args.toTypedArray(), stdin = pipe[0])
         writer.join()
-        if (!res.ok) throw InstallException(friendly(res.output, res.code))
+        if (res.ok) return
+        // 옵션 해석이 다른 기기면 세션 방식으로 한 번 더 시도
+        if (res.output.contains("Unknown option") || res.output.contains("IllegalArgumentException")) {
+            log.log("다른 방식으로 다시 설치하는 중…")
+            installSession(listOf(apk), flags, log)
+            return
+        }
+        throw InstallException(friendly(res.output, res.code))
     }
 
     private fun installSession(apks: List<ApkSources.Apk>, flags: List<String>, log: ApkSources.Logger) {
@@ -104,7 +113,7 @@ object ShizukuInstaller {
             "INSUFFICIENT_STORAGE" in o -> "저장 공간이 부족해요."
             "INVALID_APK" in o || "NO_CERTIFICATES" in o -> "APK 파일이 손상됐거나 올바르지 않아요."
             output.isBlank() -> "설치에 실패했어요 (코드 $code)."
-            else -> "설치에 실패했어요.\n${output.take(400)}"
+            else -> "설치에 실패했어요.\n${InstallErrors.summarize(output)}"
         }
     }
 }
